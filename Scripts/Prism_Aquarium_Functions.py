@@ -536,10 +536,12 @@ class Prism_Aquarium_Functions(object):
 
                 sequenceNames = (sequence for sequence in sequences if sequence.data.name == seqName)
                 sequence = next(sequenceNames, None)
-                if sequence:
-                    shotLocation = sequence._key
                 
-
+                if (sequence and sequence._key):
+                    shotLocation = sequence._key
+                else:
+                    logger.debug('Sequence do not exist, create it before shot')
+                
                 frameIn, frameOut = self.core.entities.getShotRange(prismShot)
                 shot = self.aq.item(shotLocation).append(type='Shot', data={'name': shotName, 'frameIn': frameIn, 'frameOut': frameOut}, apply_template=applyTemplate)
                 createdShots.append(shot.item.data.name)
@@ -783,8 +785,10 @@ class Prism_Aquarium_Functions(object):
                 if isShotExist:
                     isShotStoredInFolder = aqShots[shotName]['parent'].data.name == seqName
                     if isShotStoredInFolder:
+                        logger.info('Perfect, shot exist and stored in the right folder')
                         pass
                     else:
+                        logger.info('Shot need to be moved')
                         pass
                 else:
                     shotsToCreate.append(prismShotName)
