@@ -416,12 +416,11 @@ class Prism_Aquarium_Functions(object):
 
     @err_catcher(name=__name__)
     def pbBrowser_getPublishMenu(self, origin):
-        prjman = self.core.getConfig(
+        isAqActive = self.core.getConfig(
             "aquarium", "active", configPath=self.core.prismIni
         )
         if (
-            prjman
-            and origin.seq
+            isAqActive
         ):
             prjmanAct = QAction("Publish to Aquarium Studio", origin)
             prjmanAct.triggered.connect(lambda: self.prjmanPublish(origin))
