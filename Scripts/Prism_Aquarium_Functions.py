@@ -170,7 +170,9 @@ class Prism_Aquarium_Functions(object):
         origin.l_aqProjectChanged = QLabel('')
         origin.l_aqProjectChanged.setStyleSheet("color: #f03e3e;")
         origin.c_aqAssetsLocation = QComboBox()
+        origin.c_aqAssetsLocation.addItem("Select an Aquarium's project first", None)
         origin.c_aqShotsLocation = QComboBox()
+        origin.c_aqShotsLocation.addItem("Select an Aquarium's project first", None)
         origin.e_aqStepParameter = QLineEdit()
         origin.e_aqStepParameter.setPlaceholderText('If blank item.data.name will be used')
         origin.b_aqConnectUser = QPushButton('Save and go to "User" tab to add your Aquarium credentials')
@@ -456,7 +458,7 @@ class Prism_Aquarium_Functions(object):
         currentProjectKey = self.core.getConfig('aquarium', 'projectkey', configPath=self.core.prismIni)
         if currentProjectKey != origin.c_aqProject.currentData():
             self.getAqProject(projectKey=origin.c_aqProject.currentData())
-            origin.l_aqProjectChanged.setText("Warning : project changed. Don't forget to save your modifications.")
+            origin.l_aqProjectChanged.setText("Warning : project changed. Don't forget to save or apply your modifications.")
             origin.c_aqAssetsLocation.clear()
             origin.c_aqShotsLocation.clear()
             if len(self.aqProjectLocations) > 0:
@@ -482,6 +484,12 @@ class Prism_Aquarium_Functions(object):
     @err_catcher(name=__name__)
     def goToUserSettings(self, origin):
         self.core.ps.saveSettings(changeProject=False)
+        
+        connected = self.connectToAquarium()
+        self.connectedToAquarium(origin, connected=connected)
+        if (connected):
+            self.listAqProjects(origin)
+        
         # TODO: Improve index by loop in tabs
         self.core.ps.tw_settings.setCurrentIndex(1)
 
