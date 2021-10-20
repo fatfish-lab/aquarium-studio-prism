@@ -162,7 +162,7 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
             "view": {
                 "item": "item",
                 "parent": "path.vertices[-2]",
-                "tasks": "# -($Child, 2)> $Task VIEW item"
+                "tasks": "# -($Child, 2)> $Task SORT edge.data.weight VIEW item"
             }
         }
         assets = self.aq.item(self.getAssetsLocation()).traverse(meshql=query, aliases=aliases)
@@ -170,12 +170,12 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
 
     @err_catcher(name=__name__)
     def getAqProjectShots(self):
-        query = "# -($Child, 3)> $Shot AND path.edges[*].data.hidden != true  VIEW $view"
+        query = "# -($Child, 3)> $Shot AND path.edges[*].data.hidden != true VIEW $view"
         aliases = {
             "view": {
                 "item": "item",
                 "parent": "path.vertices[-2]",
-                "tasks": "# -($Child, 2)> $Task VIEW item"
+                "tasks": "# -($Child, 2)> $Task SORT edge.data.weight VIEW item"
             }
         }
         shots = self.aq.item(self.getShotsLocation()).traverse(meshql=query, aliases=aliases)
