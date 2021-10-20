@@ -425,7 +425,7 @@ class Prism_Aquarium_Functions(object):
             isAqActive
         ):
             prjmanAct = QAction("Publish to Aquarium Studio", origin)
-            prjmanAct.triggered.connect(lambda: self.prjmanPublish(origin))
+            prjmanAct.triggered.connect(lambda: self.aqPublish(origin))
             return prjmanAct
 
     @err_catcher(name=__name__)
@@ -549,9 +549,14 @@ class Prism_Aquarium_Functions(object):
         return createdShots
 
     @err_catcher(name=__name__)
-    def prjmanPublish(self, origin):
-        self.messageInfo(message='Not available yet')
-        return
+    def aqPublish(self, origin):
+        try:
+            del sys.modules["AquariumPublish"]
+        except:
+            pass
+
+        import AquariumPublish
+
         if origin.tbw_browser.currentWidget().property("tabType") == "Assets":
             pType = "Asset"
         else:
@@ -565,28 +570,73 @@ class Prism_Aquarium_Functions(object):
             .replace(" (external)", "")
         )
         versionName = origin.curRVersion.replace(" (local)", "")
-        mpb = origin.mediaPlaybacks["shots"]
 
         imgPaths = []
-        if mpb["prvIsSequence"] or len(mpb["seq"]) == 1:
-            if os.path.splitext(mpb["seq"][0])[1] in [".mp4", ".mov"]:
+        if (
+            origin.mediaPlaybacks["shots"]["prvIsSequence"]
+            or len(origin.mediaPlaybacks["shots"]["seq"]) == 1
+        ):
+            if os.path.splitext(origin.mediaPlaybacks["shots"]["seq"][0])[1] in [
+                ".mp4",
+                ".mov",
+            ]:
                 imgPaths.append(
-                    [os.path.join(mpb["basePath"], mpb["seq"][0]), mpb["curImg"]]
+                    [
+                        os.path.join(
+                            origin.mediaPlaybacks["shots"]["basePath"],
+                            origin.mediaPlaybacks["shots"]["seq"][0],
+                        ),
+                        origin.mediaPlaybacks["shots"]["curImg"],
+                    ]
                 )
             else:
                 imgPaths.append(
-                    [os.path.join(mpb["basePath"], mpb["seq"][mpb["curImg"]]), 0]
+                    [
+                        os.path.join(
+                            origin.mediaPlaybacks["shots"]["basePath"],
+                            origin.mediaPlaybacks["shots"]["seq"][
+                                origin.mediaPlaybacks["shots"]["curImg"]
+                            ],
+                        ),
+                        0,
+                    ]
                 )
         else:
-            for i in mpb["seq"]:
-                imgPaths.append([os.path.join(mpb["basePath"], i), 0])
+            for i in origin.seq:
+                imgPaths.append(
+                    [os.path.join(origin.mediaPlaybacks["shots"]["basePath"], i), 0]
+                )
 
-        if "pstart" in mpb:
-            sf = mpb["pstart"]
+        if "pstart" in origin.mediaPlaybacks["shots"]:
+            sf = origin.mediaPlaybacks["shots"]["pstart"]
         else:
             sf = 0
 
-        # do publish here
+        aqp = AquariumPublish.aqPublish(
+            core=self.core,
+            origin=self,
+            ptype=pType,
+            shotName=shotName,
+            task=taskName,
+            version=versionName,
+            sources=imgPaths,
+            startFrame=sf,
+        )
+        # if not hasattr(aqp, "sgPrjId") or not hasattr(aqp, "sgUserId"):
+        #     return
+
+        self.core.parentWindow(aqp)
+        aqp.exec_()
+
+        curTab = origin.tbw_browser.currentWidget().property("tabType")
+        curData = [
+            curTab,
+            origin.cursShots,
+            origin.curRTask,
+            origin.curRVersion,
+            origin.curRLayer,
+        ]
+        origin.showRender(curData[0], curData[1], curData[2], curData[3], curData[4])
 
     @err_catcher(name=__name__)
     def openprjman(self, shotName=None, eType="Shot", assetPath=None):
