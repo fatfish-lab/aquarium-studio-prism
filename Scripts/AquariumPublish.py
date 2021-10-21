@@ -59,14 +59,11 @@ class aqPublish(QDialog, AquariumPublish_ui.Ui_dlg_aqPublish):
         connected = self.origin.connectToAquarium()
 
         if connected == False:
+            self.origin.messageWarning(
+                message="You are not connected to Aquarium Studio. Please check your settings.",
+                title="Aquarium studio publish"
+            )
             return
-
-        # self.core.appPlugin.aquariumPublish_startup(self)
-
-        # for i in range(7):
-        #     self.cb_playlist.addItem(
-        #         "DAILIES_%s" % (datetime.date.today() + datetime.timedelta(days=i))
-        #     )
 
         if ptype == "Asset":
             self.rb_asset.setChecked(True)
@@ -76,11 +73,6 @@ class aqPublish(QDialog, AquariumPublish_ui.Ui_dlg_aqPublish):
         self.updateItems()
         self.navigateToCurrent(shotName, task)
 
-        # if self.core.appPlugin.pluginName == "Houdini" and hasattr(
-        #     self.core.appPlugin, "fixStyleSheet"
-        # ):
-        #     self.core.appPlugin.fixStyleSheet(self.gb_playlist)
-
         self.connectEvents()
 
     @err_catcher(name=__name__)
@@ -89,7 +81,7 @@ class aqPublish(QDialog, AquariumPublish_ui.Ui_dlg_aqPublish):
         self.rb_shot.pressed.connect(self.updateItems)
         # self.b_addTask.clicked.connect(self.createTask)
         self.b_addTask.setVisible(False)
-        self.cb_shot.activated.connect(self.updateTasks)
+        self.cb_items.activated.connect(self.updateTasks)
         self.b_aqPublish.clicked.connect(self.publish)
 
     @err_catcher(name=__name__)
@@ -99,10 +91,10 @@ class aqPublish(QDialog, AquariumPublish_ui.Ui_dlg_aqPublish):
         elif self.rb_shot.isChecked():
             self.aqItems = self.origin.getAqProjectShots()
 
-        self.cb_shot.clear()
+        self.cb_items.clear()
         self.itemList = {}
         if (len(self.aqItems) == 0):
-            self.cb_shot.addItem("No {itemType} found in the project".format(
+            self.cb_items.addItem("No {itemType} found in the project".format(
                 itemType=self.ptype
             ), None)
         for a in self.aqItems:
@@ -121,7 +113,7 @@ class aqPublish(QDialog, AquariumPublish_ui.Ui_dlg_aqPublish):
                     itemName=item.data.name
                 )
 
-            self.cb_shot.addItem(prismItemName, item._key)
+            self.cb_items.addItem(prismItemName, item._key)
             self.itemList[item._key] = {
                 "item": item,
                 "parent": parent,
@@ -134,7 +126,7 @@ class aqPublish(QDialog, AquariumPublish_ui.Ui_dlg_aqPublish):
     @err_catcher(name=__name__)
     def updateTasks(self, idx=None):
         self.cb_task.clear()
-        itemKey = self.cb_shot.currentData()
+        itemKey = self.cb_items.currentData()
         if itemKey == "" or itemKey is None:
             self.cb_task.addItem("No {itemType} is selected in the list".format(
                 itemType=self.ptype
@@ -146,96 +138,18 @@ class aqPublish(QDialog, AquariumPublish_ui.Ui_dlg_aqPublish):
             if (publishItem is None):
                 return
             self.aqTasks = publishItem['tasks']
-
-            taskPaths = [""]
-            if self.ptype == "Asset":
-                assetPath = self.core.getAssetPath()
-                taskPaths.append(
-                    os.path.join(
-                        assetPath,
-                        self.itemList[itemKey]['parent'].data.name,
-                        self.itemList[itemKey]['item'].data.name,
-                        "Rendering",
-                        "3dRender",
-                    )
-                )
-                taskPaths.append(
-                    os.path.join(
-                        assetPath,
-                        self.itemList[itemKey]['parent'].data.name,
-                        self.itemList[itemKey]['item'].data.name,
-                        "Rendering",
-                        "2dRender",
-                    )
-                )
-                taskPaths.append(
-                    os.path.join(
-                        assetPath,
-                        self.itemList[itemKey]['parent'].data.name,
-                        self.itemList[itemKey]['item'].data.name,
-                        "Rendering",
-                        "external",
-                    )
-                )
-                taskPaths.append(
-                    os.path.join(
-                        assetPath,
-                        self.itemList[itemKey]['parent'].data.name,
-                        self.itemList[itemKey]['item'].data.name,
-                        "Playblasts",
-                    )
-                )
-            elif self.ptype == "Shot":
-                shotPath = self.core.getShotPath()
-                taskPaths.append(
-                    os.path.join(
-                        shotPath,
-                        self.itemList[itemKey]['prismItemName'],
-                        "Rendering",
-                        "3dRender"
-                    )
-                )
-                taskPaths.append(
-                    os.path.join(
-                        shotPath,
-                        self.itemList[itemKey]['prismItemName'],
-                        "Rendering",
-                        "2dRender"
-                    )
-                )
-                taskPaths.append(
-                    os.path.join(
-                        shotPath,
-                        self.itemList[itemKey]['prismItemName'],
-                        "Rendering",
-                        "external"
-                    )
-                )
-                taskPaths.append(
-                    os.path.join(shotPath,
-                    self.itemList[itemKey]['prismItemName'],
-                    "Playblasts")
-                )
-
-            taskNames = []
-            for i in taskPaths:
-                if os.path.exists(i):
-                    taskNames += os.listdir(i)
-
-            taskNames = list(set(taskNames))
             
             if (len(self.aqTasks) == 0):
                 self.cb_task.addItem("The {itemType} {itemName} has no tasks".format(
                     itemType=self.itemList[itemKey]['item'].type,
                     itemName=self.itemList[itemKey]['item'].data.name
                 ), None)
+            else:
+                self.cb_task.addItem('Choose a task', None)
 
             for task in self.aqTasks:
                 self.cb_task.addItem(task.data.name, task._key)
             
-            if len(self.aqTasks) > 0 and len(taskNames) > 0:
-                self.cb_task.insertSeparator(len(self.aqTasks))
-            self.cb_task.addItems(taskNames)
         else:
             self.origin.messageInfo(
                 message = "Can't find the %s in the list." % self.ptype,
@@ -263,9 +177,9 @@ class aqPublish(QDialog, AquariumPublish_ui.Ui_dlg_aqPublish):
 
     @err_catcher(name=__name__)
     def navigateToCurrent(self, shotName, task):
-        idx = self.cb_shot.findText(shotName)
+        idx = self.cb_items.findText(shotName)
         if idx != -1:
-            self.cb_shot.setCurrentIndex(idx)
+            self.cb_items.setCurrentIndex(idx)
 
         self.updateTasks()
 
@@ -279,7 +193,7 @@ class aqPublish(QDialog, AquariumPublish_ui.Ui_dlg_aqPublish):
 
     @err_catcher(name=__name__)
     def publish(self):
-        if self.cb_shot.currentData() == "" or self.cb_shot.currentData() is None:
+        if self.cb_items.currentData() == "" or self.cb_items.currentData() is None:
             self.origin.messageWarning (
                 message = "No %s selected in the list. Publish canceled" % self.ptype,
                 title = "Aquarium studio publish"
@@ -302,9 +216,6 @@ class aqPublish(QDialog, AquariumPublish_ui.Ui_dlg_aqPublish):
         self.worker.moveToThread(self.thread)
 
         self.thread.started.connect(self.worker.encode)
-        self.worker.finished.connect(self.thread.quit)
-        self.worker.finished.connect(self.worker.deleteLater)
-        self.thread.finished.connect(self.thread.deleteLater)
 
         self.worker.encoding.connect(
             lambda: self.b_aqPublish.setText("Encoding...")
@@ -353,24 +264,13 @@ class aqPublish(QDialog, AquariumPublish_ui.Ui_dlg_aqPublish):
         #             raise e
         #     curTaskId = result["id"]
 
-
-
-            # sgSite = self.core.getConfig(
-            #     "aquarium", "site", configPath=self.core.prismIni
-            # )
-            # sgSite += "/detail/Version/" + str(createdVersion["id"])
-
-            # versionInfoPath = os.path.join(
-            #     os.path.dirname(source[0]), "versionInfo.yml"
-            # )
-            # if not os.path.exists(versionInfoPath):
-            #     versionInfoPath = os.path.join(
-            #         os.path.dirname(os.path.dirname(source[0])), "versionInfo.yml"
-            #     )
-
-            # self.core.setConfig("information", "aquarium-url", sgSite, configPath=versionInfoPath)
-
+    def quitThread (self):
+        if self.thread: self.thread.quit()
+        if self.worker: self.worker.deleteLater()
+        if self.thread: self.thread.deleteLater()
+    
     def errorOnPublish (self, textButton):
+        self.quitThread()
         self.b_aqPublish.setText(textButton)
         self.enableWidgets(enable = True)
 
@@ -378,11 +278,12 @@ class aqPublish(QDialog, AquariumPublish_ui.Ui_dlg_aqPublish):
         self.b_aqPublish.setEnabled(enable)
         self.rb_asset.setEnabled(enable)
         self.rb_shot.setEnabled(enable)
-        self.cb_shot.setEnabled(enable)
+        self.cb_items.setEnabled(enable)
         self.cb_task.setEnabled(enable)
         self.te_description.setEnabled(enable)
 
     def endPublish (self, published):
+        self.quitThread()
         msgStr = "Successfully published:"
         for i in published:
             msgStr += "\n%s" % i
@@ -419,257 +320,169 @@ class UploadWorker(QObject):
 
     def encode(self):
         self.started.emit()
-        self.encoding.emit()
-        curShotId = self.origin.cb_shot.currentData()
+
+        curShotId = self.origin.cb_items.currentData()
         curTaskId = self.origin.cb_task.currentData()
+        framerate = self.origin.core.getConfig(
+            "globals", "fps", dft=24.0, configPath=self.origin.core.prismIni
+        )
+
+        isffmpegInstalled = False
+        if platform.system() == "Windows":
+            ffmpegPath = os.path.join(
+                self.origin.core.prismLibs, "Tools", "FFmpeg", "bin", "ffmpeg.exe"
+            )
+            if os.path.exists(ffmpegPath):
+                isffmpegInstalled = True
+        elif platform.system() == "Linux":
+            ffmpegPath = "ffmpeg"
+            try:
+                subprocess.Popen([ffmpegPath], shell = True)
+                isffmpegInstalled = True
+            except:
+                pass
+        elif platform.system() == "Darwin":
+            ffmpegPath = os.path.join(self.origin.core.prismLibs, "Tools", "ffmpeg")
+            if os.path.exists(ffmpegPath):
+                isffmpegInstalled = True
+
+        logger.debug('ffmpeg %s', isffmpegInstalled)
+
         for source in self.origin.fileSources:
+            fileToUpload = None
             versionName = "%s_%s_%s" % (
-                self.origin.cb_shot.currentText(),
+                self.origin.cb_items.currentText(),
                 self.origin.cb_task.currentText(),
-                self.origin.taskVersion,
+                self.origin.taskVersion
             )
             if len(self.origin.fileSources) > 1:
                 versionName += "_%s" % os.path.splitext(os.path.basename(source[0]))[0]
+            
             baseName, extension = os.path.splitext(source[0])
 
-            videoInput = extension in [".mp4", ".mov"]
-            if videoInput:
-                sequenceName = source[0]
-            else:
-                try:
-                    int(baseName[-4:])
-                    sequenceName = baseName[:-4] + "####" + extension
-                except:
-                    sequenceName = source[0]
+            # TOFIX: Use mimetype instead
+            isVideoInput = extension in [".mp4", ".mov"]
+            isImageInput = extension in [                   
+                ".jpg",
+                ".jpeg",
+                ".JPG",
+                ".png",
+                ".tif",
+                ".tiff"
+            ]
 
             tmpFiles = []
 
-            ffmpegIsInstalled = False
-            if platform.system() == "Windows":
-                ffmpegPath = os.path.join(
-                    self.origin.core.prismLibs, "Tools", "FFmpeg", "bin", "ffmpeg.exe"
-                )
-                if os.path.exists(ffmpegPath):
-                    ffmpegIsInstalled = True
-            elif platform.system() == "Linux":
-                ffmpegPath = "ffmpeg"
+            inputpath = source[0].replace("\\", "/")
+
+            isSequenceInput = False
+            if not isVideoInput:
                 try:
-                    subprocess.Popen([ffmpegPath], shell = True)
-                    ffmpegIsInstalled = True
+                    x = int(inputpath[-8:-4])
+                    isSequenceInput = True
                 except:
                     pass
-            elif platform.system() == "Darwin":
-                ffmpegPath = os.path.join(self.origin.core.prismLibs, "Tools", "ffmpeg")
-                if os.path.exists(ffmpegPath):
-                    ffmpegIsInstalled = True
 
-            imgPath = source[0]
-            if extension in [".exr", ".mp4", ".mov"]:
-                inputpath = source[0].replace("\\", "/")
-                outputpath = os.path.splitext(inputpath)[0] + ".jpg"
-                if ffmpegIsInstalled:
-                    if videoInput:
-                        nProc = subprocess.Popen(
-                            [
-                                ffmpegPath,
-                                "-apply_trc",
-                                "iec61966_2_1",
-                                "-i",
-                                inputpath,
-                                "-pix_fmt",
-                                "yuv420p",
-                                "-vf",
-                                "select=gte(n\,%s)" % source[1],
-                                "-frames",
-                                "1",
-                                outputpath,
-                                "-y",
-                            ],
-                            shell = True
-                        )
-                    else:
-                        nProc = subprocess.Popen(
-                            [
-                                ffmpegPath,
-                                "-apply_trc",
-                                "iec61966_2_1",
-                                "-i",
-                                inputpath,
-                                "-pix_fmt",
-                                "yuv420p",
-                                outputpath,
-                                "-y",
-                            ],
-                            shell = True
-                        )
+            if isImageInput and not isSequenceInput:
+                fileToUpload = inputpath
 
-                    result = nProc.communicate()
-                    imgPath = outputpath
-                    tmpFiles.append(imgPath)
-
-
-            # data = {
-            #     "project": {"type": "Project", "id": self.origin.sgPrjId},
-            #     "code": versionName,
-            #     "description": self.origin.te_description.toPlainText(),
-            #     "sg_path_to_frames": sequenceName,
-            #     "sg_status_list": "rev",
-            #     "entity": {"type": self.origin.ptype, "id": curShotId},
-            #     "sg_task": {"type": "Task", "id": curTaskId},
-            # }
-
-            # if self.origin.sgUserId is not None:
-            #     data["user"] = {"type": "HumanUser", "id": self.origin.sgUserId}
-
-            # if os.path.exists(imgPath):
-            #     data["image"] = imgPath
-
-            # try:
-            #     createdVersion = self.origin.sg.create("Version", data)
-            # except Exception as e:
-            #     exc_type, exc_obj, exc_tb = sys.exc_info()
-            #     erStr = "ERROR:\n%s" % traceback.format_exc()
-            #     QMessageBox.warning(self.origin.core.messageParent, "Aquarium studio publish", erStr)
-            #     return
-
-            if ffmpegIsInstalled:
-                proxyPath = ""
-                inputpath = source[0].replace("\\", "/")
-                mp4File = (
-                    os.path.join(
-                        os.path.dirname(inputpath) + "(mp4)",
-                        os.path.basename(inputpath),
-                    )[:-9]
-                    + ".mp4"
-                )
-                pwidth = 0
-                pheight = 0
-                if os.path.exists(mp4File):
-                    proxyPath = mp4File
-                else:
-                    isSequence = False
-
-                    if not videoInput:
-                        try:
-                            x = int(inputpath[-8:-4])
-                            isSequence = True
-                        except:
-                            pass
-
-                    if os.path.splitext(inputpath)[1] in [
-                        ".jpg",
-                        ".jpeg",
-                        ".JPG",
-                        ".png",
-                        ".tif",
-                        ".tiff",
-                    ]:
-                        size = QImage(inputpath).size()
-                        pwidth = size.width()
-                        pheight = size.height()
-                    elif os.path.splitext(inputpath)[1] in [".exr"]:
-                        oiio = self.origin.core.media.getOIIO()
-
-                        if oiio:
-                            imgSpecs = oiio.ImageBuf(str(inputpath)).spec()
-                            pwidth = imgSpecs.full_width
-                            pheight = imgSpecs.full_height
-
-                    elif os.path.splitext(inputpath)[1] in [".mp4", ".mov"]:
-                        try:
-                            import imageio
-                        except:
-                            pass
-                        vidReader = imageio.get_reader(inputpath, "ffmpeg")
-
-                        pwidth = vidReader._meta["size"][0]
-                        pheight = vidReader._meta["size"][1]
-
-                    # if int(pwidth) % 2 == 1 or int(pheight) % 2 == 1:
-                    #     QMessageBox.warning(
-                    #         self.origin.core.messageParent,
-                    #         "Media conversion",
-                    #         "Media with odd resolution can't be converted to mp4. No proxy video could be generated.",
-                    #     )
-                    # else:
-                        if isSequence or videoInput:
-                            if isSequence:
-                                inputpath = os.path.splitext(inputpath)[0][:-(self.origin.core.framePadding)] + "%04d".replace("4", str(self.origin.core.framePadding)) + os.path.splitext(inputpath)[1]
-                                outputpath = os.path.splitext(inputpath)[0][:-(self.origin.core.framePadding+1)] + ".mp4"
-                                nProc = subprocess.Popen(
-                                    [
-                                        ffmpegPath,
-                                        "-start_number",
-                                        str(self.origin.startFrame),
-                                        "-framerate",
-                                        "24",
-                                        "-apply_trc",
-                                        "iec61966_2_1",
-                                        "-i",
-                                        inputpath,
-                                        "-pix_fmt",
-                                        "yuv420p",
-                                        "-start_number",
-                                        str(self.origin.startFrame),
-                                        outputpath,
-                                        "-y",
-                                    ],
-                                shell = True)
-                            else:
-                                outputpath = os.path.splitext(inputpath)[0][:-(self.origin.core.framePadding+1)] + "(proxy).mp4"
-                                nProc = subprocess.Popen(
-                                    [
-                                        ffmpegPath,
-                                        "-apply_trc",
-                                        "iec61966_2_1",
-                                        "-i",
-                                        inputpath,
-                                        "-pix_fmt",
-                                        "yuv420p",
-                                        "-start_number",
-                                        str(self.origin.startFrame),
-                                        outputpath,
-                                        "-y",
-                                    ],
-                                shell = True)
-                            
-                            mp4Result = nProc.communicate()
-                            proxyPath = outputpath
-                            tmpFiles.append(proxyPath)
-
-                logger.debug('Publish data %s', {
-                    "itemKey":curShotId,
-                    "itemName":self.origin.itemList[curShotId]['item'].data.name,
-                    "description": self.origin.te_description.toPlainText(),
-                    "version": versionName,
-                    "taskKey": curTaskId,
-                    "taskName": self.origin.cb_task.currentText(),
-                    "image": imgPath,
-                    "proxy": proxyPath
-                })
-
-                if (proxyPath == '' and imgPath != ''):
-                    proxyPath = imgPath
+            logger.debug('Input data %s', {
+                "input": inputpath,
+                "isSequence": isSequenceInput,
+                "isVideo": isVideoInput,
+                "isImage": isImageInput
+            })
+            if isffmpegInstalled:
+                self.encoding.emit()
                 
-                if (
-                    proxyPath != ""
-                    and os.path.exists(proxyPath)
-                    and os.stat(proxyPath).st_size != 0
-                ):
-                    try:
-                        self.upload(
-                            item = self.origin.itemList[curShotId]['item'],
-                            taskName = self.origin.cb_task.currentText(),
-                            filePath = proxyPath
-                        )
-                        self.uploaded.emit()
+                if isSequenceInput or isVideoInput:
+                    if isSequenceInput:
+                        inputpath = os.path.splitext(inputpath)[0][:-(self.origin.core.framePadding)] + "%04d".replace("4", str(self.origin.core.framePadding)) + os.path.splitext(inputpath)[1]
+                        outputpath = os.path.splitext(inputpath)[0][:-(self.origin.core.framePadding+1)] + ".mp4"
+                        nProc = subprocess.Popen(
+                            [
+                                ffmpegPath,
+                                "-start_number",
+                                str(self.origin.startFrame),
+                                "-framerate",
+                                str(framerate),
+                                "-apply_trc",
+                                "iec61966_2_1",
+                                "-i",
+                                inputpath,
+                                "-pix_fmt",
+                                "yuv420p",
+                                "-start_number",
+                                str(self.origin.startFrame),
+                                outputpath,
+                                "-y",
+                            ],
+                        shell = True)
+                    else:
+                        outputpath = os.path.splitext(inputpath)[0][:-(self.origin.core.framePadding+1)] + "(proxy).mp4"
+                        nProc = subprocess.Popen(
+                            [
+                                ffmpegPath,
+                                "-apply_trc",
+                                "iec61966_2_1",
+                                "-i",
+                                inputpath,
+                                "-pix_fmt",
+                                "yuv420p",
+                                "-start_number",
+                                str(self.origin.startFrame),
+                                outputpath,
+                                "-y",
+                            ],
+                        shell = True)
 
-                    except Exception as e:
-                        self.error.emit()
-                        self.origin.origin.messageWarning(
-                            message = "Uploading proxy video failed:\n\n%s" % str(e),
-                            title = 'Aquarium Studio publish'
-                        )
+                    mp4Result = nProc.communicate()
+                    fileToUpload = outputpath
+                    tmpFiles.append(outputpath)
+            elif (isSequenceInput or isVideoInput):
+                self.origin.origin.messageWarning(
+                    message="Can't find ffmpeg binary ! Check Prism parameters",
+                    title="Aquarium studio publish"
+                )
+                self.error.emit()
+                return
+
+            logger.debug('Publish data %s', {
+                "itemKey":curShotId,
+                "itemName":self.origin.itemList[curShotId]['item'].data.name,
+                "description": self.origin.te_description.toPlainText(),
+                "version": versionName,
+                "taskKey": curTaskId,
+                "taskName": self.origin.cb_task.currentText(),
+                "fileToUpload": fileToUpload
+            })
+            
+            if (
+                fileToUpload != ""
+                and fileToUpload is not None
+                and os.path.exists(fileToUpload)
+                and os.stat(fileToUpload).st_size != 0
+            ):
+                try:
+                    self.upload(
+                        item = self.origin.itemList[curShotId]['item'],
+                        taskName = self.origin.cb_task.currentText(),
+                        filePath = fileToUpload
+                    )
+                    self.uploaded.emit()
+
+                except Exception as e:
+                    self.error.emit()
+                    self.origin.origin.messageWarning(
+                        message = "Uploading proxy video failed:\n\n%s" % str(e),
+                        title = 'Aquarium Studio publish'
+                    )
+            else:
+                self.origin.origin.messageWarning(
+                    message="There is no file to upload. Publish cancelled",
+                    title="Aquarium studio publish"
+                )
+                self.finished.emit()
 
             # if self.origin.gb_playlist.isChecked():
             #     fields = ["id", "versions"]
@@ -706,8 +519,13 @@ class UploadWorker(QObject):
                     pass
 
             self.published.append(versionName)
-            self.finished.emit(self.published)
+        
+        self.finished.emit(self.published)
 
     def upload(self, item, taskName, filePath):
         self.uploading.emit()
-        item.upload_on_task(task_name=taskName, path=filePath)
+        try:
+            item.upload_on_task(task_name=taskName, path=filePath)
+        except Exception as e:
+            logger.warning("Error during upload:\n\n%s" % e)
+            self.error.emit()

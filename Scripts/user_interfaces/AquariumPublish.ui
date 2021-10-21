@@ -60,7 +60,7 @@
        <number>0</number>
       </property>
       <item>
-       <widget class="QComboBox" name="cb_shot"/>
+       <widget class="QComboBox" name="cb_items"/>
       </item>
      </layout>
     </widget>
