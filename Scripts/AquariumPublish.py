@@ -67,8 +67,10 @@ class aqPublish(QDialog, AquariumPublish_ui.Ui_dlg_aqPublish):
 
         if ptype == "Asset":
             self.rb_asset.setChecked(True)
+            self.rb_asset.setDown(True)
         else:
             self.rb_shot.setChecked(True)
+            self.rb_shot.setDown(True)
 
         self.updateItems()
         self.navigateToCurrent(shotName, task)
@@ -86,9 +88,11 @@ class aqPublish(QDialog, AquariumPublish_ui.Ui_dlg_aqPublish):
 
     @err_catcher(name=__name__)
     def updateItems(self):
-        if self.rb_asset.isChecked():
+        if self.rb_asset.isDown():
             self.aqItems = self.origin.getAqProjectAssets()
-        elif self.rb_shot.isChecked():
+            self.ptype = 'Asset'
+        elif self.rb_shot.isDown():
+            self.ptype = 'Shot'
             self.aqItems = self.origin.getAqProjectShots()
 
         self.cb_items.clear()
@@ -97,6 +101,8 @@ class aqPublish(QDialog, AquariumPublish_ui.Ui_dlg_aqPublish):
             self.cb_items.addItem("No {itemType} found in the project".format(
                 itemType=self.ptype
             ), None)
+        else:
+            self.cb_items.addItem("Choose a %s" % self.ptype, None)
         for a in self.aqItems:
             item = self.origin.aq.cast(a['item'])
             parent = self.origin.aq.cast(a['parent'])
