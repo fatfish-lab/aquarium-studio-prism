@@ -120,7 +120,7 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
                     aqProject = self.aq.item(projectKey).get()
                     self.aqProject = aqProject
 
-                    query = '# -($Child)> $Group OR $Project VIEW item'
+                    query = '# -($Child, 3)> $Group OR $Project VIEW item'
                     locations = self.aqProject.traverse(meshql=query)
                     self.aqProjectLocations = [self.aq.cast(item) for item in locations]
             except Exception as e:
