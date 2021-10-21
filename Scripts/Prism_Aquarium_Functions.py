@@ -698,14 +698,21 @@ class Prism_Aquarium_Functions(object):
                     )
                 )
                 if confirmed:
+                    steps = dict(self.core.getConfig("globals", "pipeline_steps", configPath=self.core.prismIni))
+                    logger.debug("Found those steps {steps}".format(
+                        steps=steps
+                    ))
                     for asset, parent, tasks, prismAssetName in assetsToCreate:
                         self.core.entities.createEntity('asset', prismAssetName)
                         createdAssets.append("{assetName}".format(assetName=asset.data.name))
                         
-                        steps = dict(self.core.getConfig("globals", "pipeline_steps", configPath=self.core.prismIni))
                         for task in tasks:
                             taskSteps = (step for step, categories in steps.items() if task.data.name in categories)
                             taskStep = next(taskSteps, None)
+                            logger.debug("Found the step {taskStep} matching with task {taskName}".format(
+                                taskStep=taskStep,
+                                taskName=task.data.name
+                            ))
                             if taskStep:
                                 self.core.entities.createCategory('asset', prismAssetName, taskStep, task.data.name)
 
@@ -787,14 +794,21 @@ class Prism_Aquarium_Functions(object):
                     )
                 )
                 if confirmed:
+                    steps = dict(self.core.getConfig("globals", "pipeline_steps", configPath=self.core.prismIni))
+                    logger.debug("Found those steps {steps}".format(
+                        steps=steps
+                    ))
                     for shot, parent, tasks, prismShotName in shotsToCreate:
                         self.core.entities.createEntity('shot', prismShotName, frameRange=[shot.data.frameIn, shot.data.frameOut])
                         createdShots.append("{shotName}".format(shotName=prismShotName))
                         
-                        steps = dict(self.core.getConfig("globals", "pipeline_steps", configPath=self.core.prismIni))
                         for task in tasks:
                             taskSteps = (step for step, categories in steps.items() if task.data.name in categories)
                             taskStep = next(taskSteps, None)
+                            logger.debug("Found the step {taskStep} matching with task {taskName}".format(
+                                taskStep=taskStep,
+                                taskName=task.data.name
+                            ))
                             if taskStep:
                                 self.core.entities.createCategory('shot', prismShotName, taskStep, task.data.name)
             
