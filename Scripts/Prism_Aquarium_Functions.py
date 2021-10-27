@@ -305,24 +305,16 @@ class Prism_Aquarium_Functions(object):
             prjmanMenu.addAction(actprjman)
 
             prjmanMenu.addSeparator()
-
-            actSSL = QAction("Aquarium assets to local", origin)
-            actSSL.triggered.connect(lambda: self.aqAssetsToLocal(origin))
-            prjmanMenu.addAction(actSSL)
-
-            actSSL = QAction("Local assets to Aquarium", origin)
-            actSSL.triggered.connect(lambda: self.localAssetsToAq(origin))
+            
+            actSSL = QAction("Sync Aquarium > Prism", origin)
+            actSSL.triggered.connect(lambda: self.aqSync(origin, 'prism'))
             prjmanMenu.addAction(actSSL)
 
             prjmanMenu.addSeparator()
-
-            actSSL = QAction("Aquarium shots to local", origin)
-            actSSL.triggered.connect(lambda: self.aqShotsToLocal(origin))
+            
+            actSSL = QAction("Sync Prism > Aquarium", origin)
+            actSSL.triggered.connect(lambda: self.aqSync(origin, 'aquarium'))
             prjmanMenu.addAction(actSSL)
-
-            actLSS = QAction("Local shots to Aquarium", origin)
-            actLSS.triggered.connect(lambda: self.localShotsToAq(origin))
-            prjmanMenu.addAction(actLSS)
 
             return prjmanMenu
 
@@ -549,6 +541,30 @@ class Prism_Aquarium_Functions(object):
         return createdShots
 
     @err_catcher(name=__name__)
+    def aqSync(self, origin, target):
+        try:
+            del sys.modules["AquariumSync"]
+        except:
+            pass
+
+        import AquariumSync
+
+        if origin.tbw_browser.currentWidget().property("tabType") == "Assets":
+            pType = "Asset"
+        else:
+            pType = "Shot"
+
+        aqs = AquariumSync.aqSync(
+            core=self.core,
+            origin=self,
+            ptype=pType,
+            target=target
+        )
+
+        self.core.parentWindow(aqs)
+        aqs.exec_()
+
+    @err_catcher(name=__name__)
     def aqPublish(self, origin):
         try:
             del sys.modules["AquariumPublish"]
@@ -660,215 +676,6 @@ class Prism_Aquarium_Functions(object):
         import webbrowser
 
         webbrowser.open(prjmanSite)
-
-    @err_catcher(name=__name__)
-    def aqAssetsToLocal(self, origin):
-        connected = self.connectToAquarium()
-        
-        if connected:
-            stepParameter = self.core.getConfig("aquarium", "stepparameter", configPath=self.core.prismIni)
-            if stepParameter == None:
-                stepParameter = 'item.data.name'
-            assetsLocationKey = self.getAssetsLocation()
-            
-            assets = self.getAqProjectAssets()
-            
-            assetsToCreate = []
-            createdAssets = []
-            for a in assets:
-                asset = self.aq.cast(a['item'])
-                parent = self.aq.cast(a['parent'])
-                tasks = [self.aq.cast(task) for task in a['tasks']]
-                assetParent = ''
-                if (assetsLocationKey and assetsLocationKey != parent._key and assetsLocationKey != self.aqProject._key):
-                    assetParent = "{parentName}\\".format(
-                        parentName=parent.data.name
-                    )
-                prismAssetName = "{assetParent}{assetName}".format(
-                        assetParent=assetParent,
-                        assetName=asset.data.name
-                    )
-                prismAssetPath = os.path.join(origin.aBasePath, prismAssetName)
-                if not os.path.exists(prismAssetPath):
-                    assetsToCreate.append([asset, parent, tasks, prismAssetName])
-            if (len(assetsToCreate) > 0):
-                confirmed = self.messageConfirm(
-                    message="{assetsNumber} asset(s) will be created in Prism. Do you want to continue ?".format(
-                        assetsNumber=len(assetsToCreate)
-                    )
-                )
-                if confirmed:
-                    steps = dict(self.core.getConfig("globals", "pipeline_steps", configPath=self.core.prismIni))
-                    logger.debug("Found those steps {steps}".format(
-                        steps=steps
-                    ))
-                    for asset, parent, tasks, prismAssetName in assetsToCreate:
-                        self.core.entities.createEntity('asset', prismAssetName)
-                        createdAssets.append("{assetName}".format(assetName=asset.data.name))
-                        
-                        for task in tasks:
-                            taskSteps = (step for step, categories in steps.items() if task.data.name in categories)
-                            taskStep = next(taskSteps, None)
-                            logger.debug("Found the step {taskStep} matching with task {taskName}".format(
-                                taskStep=taskStep,
-                                taskName=task.data.name
-                            ))
-                            if taskStep:
-                                self.core.entities.createCategory('asset', prismAssetName, taskStep, task.data.name)
-
-            self.messageCreationInfo(createdAssets, type="assets")
-
-            origin.refreshAHierarchy()
-        else:
-            self.messageWarning("Your are not connected to Aquarium. Please check the 'User' and 'Project' settings.")
-
-    @err_catcher(name=__name__)
-    def localAssetsToAq(self, origin):
-        connected = self.connectToAquarium()
-
-        if connected:
-            assetsToCreate = []
-            createdAssets = []
-            assets = self.core.entities.getAssetPaths()
-            aBasePath = self.core.getAssetPath()
-            localAssets = [[os.path.basename(path), path.replace(aBasePath, "").replace(os.path.basename(path), "")[1:-1], path.replace(aBasePath, "")] for path in assets]
-            aqAssets = {
-                asset['item']['data']['name']: {
-                'asset': self.aq.cast(asset['item']),
-                'parent': self.aq.cast(asset['parent'])
-            } for asset in self.getAqProjectAssets()}
-
-            for assetName, folderName, prismAssetName in localAssets:
-                isAssetExist = assetName in aqAssets
-                if isAssetExist:
-                    isAssetStoredInFolder = aqAssets[assetName]['parent'].data.name == folderName
-                    if isAssetStoredInFolder:
-                        pass
-                    else:
-                        pass
-                else:
-                    assetsToCreate.append(prismAssetName)
-            if (len(assetsToCreate) > 0):
-                confirmed = self.messageConfirm(
-                    message="{assetsNumber} asset(s) will be created on Aquarium. Do you want to continue ?".format(
-                        assetsNumber=len(assetsToCreate)
-                    )
-                )
-                if confirmed:
-                    createdAssets = self.createAqAssets(assetsToCreate)
-            
-            self.messageCreationInfo(createdAssets, type='assets')
-        else:
-            self.messageWarning("Your are not connected to Aquarium. Please check the 'User' and 'Project' settings.")
-
-    @err_catcher(name=__name__)
-    def aqShotsToLocal(self, origin):
-        connected = self.connectToAquarium()
-        
-        if connected:
-            stepParameter = self.core.getConfig("aquarium", "stepparameter", configPath=self.core.prismIni)
-            if stepParameter == None:
-                stepParameter = 'item.data.name'
-            
-            shots = self.getAqProjectShots()
-            
-            shotsToCreate = []
-            createdShots = []
-            for a in shots:
-                shot = self.aq.cast(a['item'])
-                parent = self.aq.cast(a['parent'])
-                tasks = [self.aq.cast(task) for task in a['tasks']]
-                prismShotName = "{sequenceName}{separator}{shotName}".format(
-                    sequenceName=parent.data.name,
-                    separator=self.core.sequenceSeparator,
-                    shotName=shot.data.name
-                )
-                shotPath = os.path.join(origin.sBasePath, prismShotName)
-                if not os.path.exists(shotPath):
-                    shotsToCreate.append([shot, parent, tasks, prismShotName])
-            
-            if (len(shotsToCreate) > 0):
-                confirmed = self.messageConfirm(
-                    message="{shotsNumber} shot(s) will be created in Prism. Do you want to continue ?".format(
-                        shotsNumber=len(shotsToCreate)
-                    )
-                )
-                if confirmed:
-                    steps = dict(self.core.getConfig("globals", "pipeline_steps", configPath=self.core.prismIni))
-                    logger.debug("Found those steps {steps}".format(
-                        steps=steps
-                    ))
-                    for shot, parent, tasks, prismShotName in shotsToCreate:
-                        self.core.entities.createEntity('shot', prismShotName, frameRange=[shot.data.frameIn, shot.data.frameOut])
-                        createdShots.append("{shotName}".format(shotName=prismShotName))
-                        
-                        for task in tasks:
-                            taskSteps = (step for step, categories in steps.items() if task.data.name in categories)
-                            taskStep = next(taskSteps, None)
-                            logger.debug("Found the step {taskStep} matching with task {taskName}".format(
-                                taskStep=taskStep,
-                                taskName=task.data.name
-                            ))
-                            if taskStep:
-                                self.core.entities.createCategory('shot', prismShotName, taskStep, task.data.name)
-            
-            self.messageCreationInfo(createdShots, type='shots')
-
-            origin.refreshShots()
-        else:
-            self.messageWarning("Your are not connected to Aquarium. Please check the 'User' and 'Project' settings.")
-
-    @err_catcher(name=__name__)
-    def localShotsToAq(self, origin):
-        connected = self.connectToAquarium()
-
-        if connected:
-            shotsToCreate = []
-            createdShots = []
-            for i in os.walk(origin.sBasePath):
-                foldercont = i
-                break
-
-            self.core.entities.refreshOmittedEntities()
-            localShots = []
-            for prismShotName in foldercont[1]:
-                if not prismShotName.startswith("_") and prismShotName not in self.core.entities.omittedEntities["shot"]:
-                    shotName, seqName = self.core.entities.splitShotname(prismShotName)
-                    if seqName == "no sequence":
-                        seqName = ""
-
-                    localShots.append([shotName, seqName, prismShotName])
-            aqShots = {
-                shot['item']['data']['name']: {
-                'asset': self.aq.cast(shot['item']),
-                'parent': self.aq.cast(shot['parent'])
-            } for shot in self.getAqProjectShots()}
-
-            for shotName, seqName, prismShotName in localShots:
-                isShotExist = shotName in aqShots
-                if isShotExist:
-                    isShotStoredInFolder = aqShots[shotName]['parent'].data.name == seqName
-                    if isShotStoredInFolder:
-                        logger.info('Perfect, shot exist and stored in the right folder')
-                        pass
-                    else:
-                        logger.info('Shot need to be moved')
-                        pass
-                else:
-                    shotsToCreate.append(prismShotName)
-
-            if (len(shotsToCreate) > 0):
-                confirmed = self.messageConfirm(
-                    message="{shotsNumber} shot(s) will be created on Aquarium. Do you want to continue ?".format(
-                        shotsNumber=len(shotsToCreate)
-                    )
-                )
-                if confirmed:
-                    createdShots = self.createAqShots(shotsToCreate)
-            
-            self.messageCreationInfo(createdShots, type='shots')
-        else:
-            self.messageWarning("Your are not connected to Aquarium. Please check the 'User' and 'Project' settings.")
 
     @err_catcher(name=__name__)
     def onProjectBrowserClose(self, origin):
