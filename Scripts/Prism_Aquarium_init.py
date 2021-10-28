@@ -163,17 +163,15 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
             "view": {
                 "item": "item",
                 "parent": "path.vertices[-2]",
+                "parents": "path.vertices",
                 "tasks": "# -($Child, 2)> $Task SORT edge.data.weight VIEW item"
             }
         }
         assets = self.aq.item(startpoint).traverse(meshql=query, aliases=aliases)
 
         for asset in assets:
-            prismId = None
-            if (asset['parent']['_key'] == startpoint):
-                prismId = asset['item']['data']['name']
-            else:
-                prismId = os.path.join(asset['parent']['data']['name'],asset['item']['data']['name'])
+            parents = list(map(lambda parent: parent['data']['name'],asset['parents']))[1:-1]
+            prismId = os.path.join(*parents,asset['item']['data']['name'])
             asset['prismId'] = prismId
         
         return assets

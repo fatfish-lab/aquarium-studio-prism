@@ -272,18 +272,22 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
         assetsToCreate = []
         assets = self.core.entities.getAssetPaths()
         aBasePath = self.core.getAssetPath()
-        prismAssets = [[os.path.basename(path), path.replace(aBasePath, "").replace(os.path.basename(path), "")[1:-1], path.replace(aBasePath, "")[1:]] for path in assets]
+        prismAssets = [[
+            os.path.basename(path),
+            os.path.basename(os.path.dirname(path)),
+            path.replace(aBasePath, "").replace(os.path.basename(path), "")[1:-1],
+            path.replace(aBasePath, "")[1:]] for path in assets]
 
         self.core.entities.refreshOmittedEntities()
         location = self.origin.getAssetsLocation()
         steps = dict(self.origin.core.getConfig("globals", "pipeline_steps", configPath=self.origin.core.prismIni))
 
-        for assetName, folderName, prismAssetName in prismAssets:
+        for assetName, parentFolderName, prismFolderName, prismAssetName in prismAssets:
             if prismAssetName not in self.core.entities.omittedEntities["asset"]:
                 isAssetExist = prismAssetName in self.aqItems
                 if isAssetExist:
                     parent = self.aqItems[prismAssetName]['parent']
-                    isAssetStoredInFolder = parent.data.name == folderName or parent._key == location
+                    isAssetStoredInFolder = parent.data.name == parentFolderName or parent._key == location
                     if isAssetStoredInFolder:
                         categories = []
                         tasksName = list(map(lambda task: task.data.name, self.aqItems[prismAssetName]['tasks']))
@@ -344,10 +348,10 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                                 if category not in tasksName:
                                     categories.append([step, category])
 
-                        parentName = parent.data.name if parent._key != location else 'Root location'
+                    parentName = parent.data.name if parent._key != location else 'Root location'
                     if len(categories) > 0:
                         shotsToCreate.append([False, 'update', item._key, parentName, categories, False])
-                else:
+                    else:
                         frameIn, frameOut = self.core.entities.getShotRange(prismShotName)
                         newFrameRange = []
                         if frameIn != item.data.frameIn: newFrameRange.append('frameIn : {frameIn}'.format(frameIn=frameIn))
@@ -355,7 +359,7 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                         if len(newFrameRange) > 0:
                             shotsToCreate.append([False, 'update frame range', item._key, parentName, categories, ' - '.join(newFrameRange), False])
 
-            else:
+                else:
                     shotsToCreate.append([False, 'move', self.aqItems[prismShotName]['item']._key, seqName, 'Do not change categories', None, False])
             else:
                 shotsToCreate.append([True, 'create', shotName, seqName, 'Categorie from Aquarium template', None, False])
@@ -465,7 +469,7 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                         title='Aquarium Studio sync'
                     )
                     return
-                folders = [self.origin.aq.cast(group) for group in self.origin.aq.item(location).traverse(meshql='# -($Child)> $Group VIEW item')]
+                folders = [self.origin.aq.cast(group) for group in self.origin.aq.item(location).traverse(meshql='# -($Child, 3)> $Group VIEW item')]
                 
                 for data in selectedData:
                     action = data[1]
@@ -486,15 +490,28 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
 
                     if self.target == 'aquarium':
                         itemLocation = location
-                        folderNames = (folder for folder in folders if folder.data.name == parentName)
-                        folder = next(folderNames, None)
-                        if folder:
-                            itemLocation = folder._key
-                        elif parentName is not None and len(parentName) > 0:
-                            group = self.origin.aq.item(itemLocation).append(type='Group', data={'name': parentName}, apply_template=True)
-                            if group:
-                                folders.append(group.item)
-                                itemLocation = group.item._key
+                        if len(parentName) > 0:
+                            parentsName = os.path.normpath(parentName).split(os.sep)
+                            if len(parentsName) > 0:
+                                folderNames = (folder for folder in folders if folder.data.name == parentsName[-1])
+                                folder = next(folderNames, None)
+                                if folder:
+                                    itemLocation = folder._key
+                                elif parentName is not None:
+                                    try:
+                                        for folderName in parentsName:
+                                            folderNames = (folder for folder in folders if folder.data.name == folderName)
+                                            folder = next(folderNames, None)
+                                            if folder:
+                                                itemLocation = folder._key
+                                            else:
+                                                group = self.origin.aq.item(itemLocation).append(type='Group', data={'name': folderName}, apply_template=True)
+                                                if group:
+                                                    folders.append(group.item)
+                                                    itemLocation = group.item._key
+                                    except Exception as e:
+                                        data[-1] = e
+                                        return
                         if action == 'create':
                             try:
                                 itemData = {
