@@ -40,7 +40,8 @@ class TableModel(QAbstractTableModel):
                     2: lambda: 'ITEM NAME',
                     3: lambda: 'FOLDER',
                     4: lambda: 'CATEGORIES',
-                    5: lambda: 'SYNCED STATUS',
+                    5: lambda: 'UPDATES',
+                    6: lambda: 'SYNCED STATUS',
                 }[index]()
             else:
                 return index + 1
@@ -54,7 +55,8 @@ class TableModel(QAbstractTableModel):
                 2: lambda value: self.origin.getItem(value)['item'].data.name if self.origin.getItem(value) is not None else value,
                 3: lambda value: self.origin.getItem(value)['parent'].data.name if self.origin.getItem(value) is not None else value,
                 4: lambda value: ','.join(map(lambda val: '({step}) {category}'.format(step=val[0], category=val[1]), value)) if isinstance(value, list) else value,
-                5: lambda value: 'Synced' if value == True else 'Not synced' if value == False else value,
+                5: lambda value: value,
+                6: lambda value: 'Synced' if value == True else 'Not synced' if value == False else value,
             }[index.column()](value)
         elif role == Qt.TextAlignmentRole:
             return {
@@ -63,7 +65,8 @@ class TableModel(QAbstractTableModel):
                 2: lambda value: Qt.AlignCenter,
                 3: lambda value: Qt.AlignCenter,
                 4: lambda value: Qt.AlignCenter,
-                5: lambda value: Qt.AlignCenter
+                5: lambda value: Qt.AlignCenter,
+                6: lambda value: Qt.AlignCenter
             }[index.column()](value)
         elif role == Qt.ForegroundRole:
             return {
@@ -72,7 +75,8 @@ class TableModel(QAbstractTableModel):
                 2: lambda value: '',
                 3: lambda value: '',
                 4: lambda value: '',
-                5: lambda value: QColor('#37b24d') if value == True else QColor('#f03e3e')
+                5: lambda value: '',
+                6: lambda value: QColor('#37b24d') if value == True else QColor('#f03e3e')
             }[index.column()](value)
         elif role == Qt.CheckStateRole:
             return {
@@ -81,7 +85,8 @@ class TableModel(QAbstractTableModel):
                 2: lambda value: None,
                 3: lambda value: None,
                 4: lambda value: None,
-                5: lambda value: None
+                5: lambda value: None,
+                6: lambda value: None
             }[index.column()](value)
         else:
             return None
@@ -293,12 +298,12 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
 
                         if len(categories) > 0:
                             parentName = parent.data.name if parent._key != location else 'Root location'
-                            assetsToCreate.append([False, 'update', self.aqItems[prismAssetName]['item']._key, parentName, categories, False])
+                            assetsToCreate.append([False, 'update', self.aqItems[prismAssetName]['item']._key, parentName, categories, None, False])
                     else:
-                        assetsToCreate.append([False, 'move', self.aqItems[prismAssetName]['item']._key, folderName, 'Do not change categories', False])
+                        assetsToCreate.append([False, 'move', self.aqItems[prismAssetName]['item']._key, prismFolderName, 'Do not change categories', None, False])
                         pass
                 else:
-                    assetsToCreate.append([True, 'create', assetName, folderName, 'Categorie from Aquarium template', False])
+                    assetsToCreate.append([True, 'create', assetName, prismFolderName, 'Categorie from Aquarium template', None, False])
 
         return assetsToCreate
 
@@ -330,6 +335,7 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                     categories = []
                     tasksName = list(map(lambda task: task.data.name, self.aqItems[prismShotName]['tasks']))
                     shotPrismSteps = self.core.entities.getSteps(shot=prismShotName)
+                    item = self.aqItems[prismShotName]['item']
 
                     for step in shotPrismSteps:
                         if step in steps.keys():
@@ -338,13 +344,21 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                                 if category not in tasksName:
                                     categories.append([step, category])
 
-                    if len(categories) > 0:
                         parentName = parent.data.name if parent._key != location else 'Root location'
-                        shotsToCreate.append([False, 'update', self.aqItems[prismShotName]['item']._key, parentName, categories, False])
+                    if len(categories) > 0:
+                        shotsToCreate.append([False, 'update', item._key, parentName, categories, False])
                 else:
-                    shotsToCreate.append([False, 'move', self.aqItems[prismShotName]['item']._key, seqName, 'Do not change categories', False])
+                        frameIn, frameOut = self.core.entities.getShotRange(prismShotName)
+                        newFrameRange = []
+                        if frameIn != item.data.frameIn: newFrameRange.append('frameIn : {frameIn}'.format(frameIn=frameIn))
+                        if frameOut != item.data.frameOut: newFrameRange.append('frameOut : {frameOut}'.format(frameOut=frameOut))
+                        if len(newFrameRange) > 0:
+                            shotsToCreate.append([False, 'update frame range', item._key, parentName, categories, ' - '.join(newFrameRange), False])
+
             else:
-                shotsToCreate.append([True, 'create', shotName, seqName, 'Categorie from Aquarium template', False])
+                    shotsToCreate.append([False, 'move', self.aqItems[prismShotName]['item']._key, seqName, 'Do not change categories', None, False])
+            else:
+                shotsToCreate.append([True, 'create', shotName, seqName, 'Categorie from Aquarium template', None, False])
         return shotsToCreate
 
     @err_catcher(name=__name__)
@@ -381,7 +395,7 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                 categories = 'No categories detected'
 
             if action:
-                assetsToCreate.append([True, action, item._key, item._key, categories, False])
+                assetsToCreate.append([True, action, item._key, item._key, categories, None, False])
 
         return assetsToCreate
 
@@ -417,9 +431,16 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                 action = 'update'
             elif len(categories) == 0 and action is 'create':
                 categories = 'No categories detected'
+            elif action is None:
+                frameIn, frameOut = self.core.entities.getShotRange(prismId)
+                newFrameRange = []
+                if frameIn != item.data.frameIn: newFrameRange.append('frameIn : {frameIn}'.format(frameIn=item.data.frameIn))
+                if frameOut != item.data.frameOut: newFrameRange.append('frameOut : {frameOut}'.format(frameOut=item.data.frameOut))
+                if len(newFrameRange) > 0:
+                    shotsToCreate.append([False, 'update frame range', item._key, item._key, categories, ' - '.join(newFrameRange), False])
 
             if action:
-                shotsToCreate.append([True, action, item._key, item._key, categories, False])
+                shotsToCreate.append([True, action, item._key, item._key, categories, None, False])
 
         return shotsToCreate
 
@@ -476,7 +497,15 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                                 itemLocation = group.item._key
                         if action == 'create':
                             try:
-                                self.origin.aq.item(itemLocation).append(type=self.ptype, data={'name': itemName}, apply_template=True)
+                                itemData = {
+                                    'name': itemName
+                                }
+                                if (self.ptype == 'Shot'):
+                                    frameIn, frameOut = self.core.entities.getShotRange(self.getItem(data[2])['prismId'])
+                                    itemData['frameIn'] = frameIn
+                                    itemData['frameOut'] = frameOut
+                                
+                                self.origin.aq.item(itemLocation).append(type=self.ptype, data=itemData, apply_template=True)
                                 data[-1] = True
                             except Exception as e:
                                 data[-1] = e
@@ -490,6 +519,19 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                                     data[-1] = e
                             else:
                                 data[-1] = "Can't find the item to append the new tasks"
+                        elif action == 'update frame range':
+                            if item:
+                                try:
+                                    frameIn, frameOut = self.core.entities.getShotRange(self.getItem(data[2])['prismId'])
+                                    item.update_data(data={
+                                        frameIn: frameIn,
+                                        frameOut: frameOut
+                                    })
+                                    data[-1] = True
+                                except Exception as e:
+                                    data[-1] = e
+                            else:
+                                data[-1] = "Can't find the item to update frame range"
                         elif action == 'move':
                             try:
                                 if item and parent and itemLocation:
@@ -511,6 +553,8 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                             try:
                                 if prismItemName:
                                     self.core.entities.createEntity(self.ptype.lower(), prismItemName)
+                                    if item and self.ptype == 'Shot':
+                                        self.core.entities.setShotRange(self, prismItemName, item.data.frameIn, item.data.frameOut)
                                 
                                     for step, category in categories:
                                         if step and category:
@@ -526,6 +570,15 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                                     for step, category in categories:
                                         if step and category:
                                             self.core.entities.createCategory(self.ptype.lower(), prismItemName, step, category)
+                                    data[-1] = True
+                                else:
+                                    data[-1] = "Can't detect prism item name. Not synced"
+                            except Exception as e:
+                                data[-1] = e
+                        elif action == 'update frame range':
+                            try:
+                                if prismItemName and item:                               
+                                    self.core.entities.setShotRange(self, prismItemName, item.data.frameIn, item.data.frameOut)
                                     data[-1] = True
                                 else:
                                     data[-1] = "Can't detect prism item name. Not synced"
