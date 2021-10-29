@@ -156,6 +156,12 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
         return location
 
     @err_catcher(name=__name__)
+    def getTimelogsLocation (self):
+        location = self.core.getConfig('aquarium', 'timelogslocationkey', configPath=self.core.prismIni)
+        if not location: location = self.aqProject._key
+        return location
+
+    @err_catcher(name=__name__)
     def getAqProjectAssets(self):
         startpoint = self.getAssetsLocation()
         query = "# -($Child, 3)> $Asset AND path.edges[*].data.hidden != true VIEW $view"
