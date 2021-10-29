@@ -420,6 +420,7 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                 action = 'create'
             
             categories = []
+            updates = []
             for task in tasks:
                 taskSteps = (step for step, categories in steps.items() if task.data.name in categories)
                 taskStep = next(taskSteps, None)
@@ -436,15 +437,20 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
             elif len(categories) == 0 and action is 'create':
                 categories = 'No categories detected'
             elif action is None:
-                frameIn, frameOut = self.core.entities.getShotRange(prismId)
-                newFrameRange = []
-                if frameIn != item.data.frameIn: newFrameRange.append('frameIn : {frameIn}'.format(frameIn=item.data.frameIn))
-                if frameOut != item.data.frameOut: newFrameRange.append('frameOut : {frameOut}'.format(frameOut=item.data.frameOut))
-                if len(newFrameRange) > 0:
-                    shotsToCreate.append([False, 'update frame range', item._key, item._key, categories, ' - '.join(newFrameRange), False])
+                shotRange = self.core.entities.getShotRange(prismId)
+                if shotRange:
+                    frameIn, frameOut = shotRange
+                    if frameIn != item.data.frameIn: updates.append('frameIn : {frameIn}'.format(frameIn=item.data.frameIn))
+                    if frameOut != item.data.frameOut: updates.append('frameOut : {frameOut}'.format(frameOut=item.data.frameOut))
+                else:
+                    if item.data.frameIn is not None: updates.append('frameIn : {frameIn}'.format(frameIn=item.data.frameIn))
+                    if item.data.frameOut is not None: updates.append('frameOut : {frameOut}'.format(frameOut=item.data.frameOut))
+                if len(updates) > 0:
+                    action = 'update frame range'
+                    updates = ' - '.join(updates)
 
             if action:
-                shotsToCreate.append([True, action, item._key, item._key, categories, None, False])
+                shotsToCreate.append([True, action, item._key, item._key, categories, updates, False])
 
         return shotsToCreate
 
@@ -474,11 +480,13 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                 for data in selectedData:
                     action = data[1]
 
+                    prismId = data[2]
                     itemName = data[2]
                     item = None
                     if self.getItem(data[2]): 
                         item = self.getItem(data[2])['item']
                         itemName = item.data.name
+                        prismId = self.getItem(data[2])['prismId']
                     
                     parentName = data[3]
                     parent = None
@@ -510,22 +518,24 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                                                     folders.append(group.item)
                                                     itemLocation = group.item._key
                                     except Exception as e:
-                                        data[-1] = e
+                                        data[-1] = str(e)
                                         return
                         if action == 'create':
                             try:
                                 itemData = {
                                     'name': itemName
                                 }
-                                if (self.ptype == 'Shot'):
-                                    frameIn, frameOut = self.core.entities.getShotRange(self.getItem(data[2])['prismId'])
-                                    itemData['frameIn'] = frameIn
-                                    itemData['frameOut'] = frameOut
-                                
+                                if self.ptype == 'Shot' and prismId:
+                                    shotRange = self.core.entities.getShotRange(prismId)
+                                    if shotRange:
+                                        frameIn, frameOut = shotRange
+                                        itemData['frameIn'] = frameIn
+                                        itemData['frameOut'] = frameOut
+                                    
                                 self.origin.aq.item(itemLocation).append(type=self.ptype, data=itemData, apply_template=True)
                                 data[-1] = True
                             except Exception as e:
-                                data[-1] = e
+                                data[-1] = str(e)
                         elif action == 'update':
                             if item:
                                 try:
@@ -533,7 +543,7 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                                         item.append(type='Task', data={'name': category}, apply_template=True)
                                     data[-1] = True
                                 except Exception as e:
-                                    data[-1] = e
+                                    data[-1] = str(e)
                             else:
                                 data[-1] = "Can't find the item to append the new tasks"
                         elif action == 'update frame range':
@@ -541,12 +551,12 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                                 try:
                                     frameIn, frameOut = self.core.entities.getShotRange(self.getItem(data[2])['prismId'])
                                     item.update_data(data={
-                                        frameIn: frameIn,
-                                        frameOut: frameOut
+                                        'frameIn': frameIn,
+                                        'frameOut': frameOut
                                     })
                                     data[-1] = True
                                 except Exception as e:
-                                    data[-1] = e
+                                    data[-1] = str(e)
                             else:
                                 data[-1] = "Can't find the item to update frame range"
                         elif action == 'move':
@@ -560,7 +570,7 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                                 else:
                                     data[-1] = "Can't find the item to move it under parent"
                             except Exception as e:
-                                data[-1] = e
+                                data[-1] = str(e)
 
                     elif self.target == 'prism':
                         prismItemNames = (key for key in self.aqItems if key == self.getItem(data[2])['prismId'])
@@ -580,7 +590,7 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                                 else:
                                     data[-1] = "Can't detect prism item name. Not synced"
                             except Exception as e:
-                                data[-1] = e
+                                data[-1] = str(e)
                         elif action == 'update':
                             try:
                                 if prismItemName:                               
@@ -591,7 +601,7 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                                 else:
                                     data[-1] = "Can't detect prism item name. Not synced"
                             except Exception as e:
-                                data[-1] = e
+                                data[-1] = str(e)
                         elif action == 'update frame range':
                             try:
                                 if prismItemName and item:                               
@@ -600,7 +610,7 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                                 else:
                                     data[-1] = "Can't detect prism item name. Not synced"
                             except Exception as e:
-                                data[-1] = e
+                                data[-1] = str(e)
                             
                     else:
                         return
