@@ -571,7 +571,7 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                                 if prismItemName:
                                     self.core.entities.createEntity(self.ptype.lower(), prismItemName)
                                     if item and self.ptype == 'Shot':
-                                        self.core.entities.setShotRange(self, prismItemName, item.data.frameIn, item.data.frameOut)
+                                        self.core.entities.setShotRange(prismItemName, item.data.frameIn, item.data.frameOut)
                                 
                                     for step, category in categories:
                                         if step and category:
@@ -595,7 +595,7 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                         elif action == 'update frame range':
                             try:
                                 if prismItemName and item:                               
-                                    self.core.entities.setShotRange(self, prismItemName, item.data.frameIn, item.data.frameOut)
+                                    self.core.entities.setShotRange(prismItemName, item.data.frameIn, item.data.frameOut)
                                     data[-1] = True
                                 else:
                                     data[-1] = "Can't detect prism item name. Not synced"
