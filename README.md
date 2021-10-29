@@ -42,17 +42,19 @@ Now, we need to configure the categories of Prism to match the corresponding Aqu
     1. The steps doesn't exist in Aquarium, so can organize and name them as you want
     1. The categorie names, need to match with the tasks name of your shots and/or assets
     1. During Aquarium to Prism sync, if a task doesn't exist, the categorie will be ignored
-    1. Exemple de configuration 
+    1. Configuration example. If you are using our Prism demo project available in Aquarium studio, you can copy the following pipeline_steps : 
         ```yml
         - pipeline_steps: !!omap
             - 3d:
+                - modeling
+                - rigging
                 - layout
                 - animation
-                - set dressing
-                - modeling
-                - texturing
+                - fx
+                - rendering
             - 2d:
                 - design
+                - texturing
                 - compositing
         ```
 
