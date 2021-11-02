@@ -426,7 +426,7 @@ class Prism_Aquarium_Functions(object):
             "aquarium", "active", configPath=self.core.prismIni
         )
         if (
-            isAqActive
+            isAqActive and origin.mediaPlaybacks["shots"]["seq"]
         ):
             prjmanAct = QAction("Publish to Aquarium Studio", origin)
             prjmanAct.triggered.connect(lambda: self.aqPublish(origin))
@@ -661,7 +661,7 @@ class Prism_Aquarium_Functions(object):
                     ]
                 )
         else:
-            for i in origin.seq:
+            for i in origin.mediaPlaybacks["shots"]["seq"]:
                 imgPaths.append(
                     [os.path.join(origin.mediaPlaybacks["shots"]["basePath"], i), 0]
                 )
