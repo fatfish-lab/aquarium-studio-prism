@@ -69,7 +69,7 @@ class aqTimelogs(QDialog, AquariumTimelogs_ui.Ui_dlg_aqTimelogs):
         self.b_createtimelogs.setEnabled(False)
 
         self.cb_tags.addItem('Standard', 'standard')
-        self.cb_tags.addItem('Extra', 'extra')
+        self.cb_tags.addItem('Overtime', 'overtime')
 
         connected = self.origin.connectToAquarium()
         if connected:
