@@ -177,7 +177,7 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
 
         for asset in assets:
             parents = list(map(lambda parent: parent['data']['name'],asset['parents']))[1:-1]
-            prismId = os.path.join(*parents,asset['item']['data']['name'])
+            prismId = os.path.join(*(parents + [asset['item']['data']['name']]))
             asset['prismId'] = prismId
         
         return assets
