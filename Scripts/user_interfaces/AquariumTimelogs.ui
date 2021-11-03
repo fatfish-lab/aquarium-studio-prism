@@ -176,7 +176,7 @@
                   </widget>
                  </item>
                  <item>
-                  <widget class="QSpinBox" name="sb_day"/>
+                  <widget class="QDoubleSpinBox" name="sb_day"/>
                  </item>
                  <item>
                   <widget class="QLabel" name="l_hour">
@@ -186,7 +186,7 @@
                   </widget>
                  </item>
                  <item>
-                  <widget class="QSpinBox" name="sb_hour"/>
+                  <widget class="QDoubleSpinBox" name="sb_hour"/>
                  </item>
                  <item>
                   <widget class="QLabel" name="l_minute">
@@ -196,7 +196,7 @@
                   </widget>
                  </item>
                  <item>
-                  <widget class="QSpinBox" name="sb_minute"/>
+                  <widget class="QDoubleSpinBox" name="sb_minute"/>
                  </item>
                 </layout>
                </item>
