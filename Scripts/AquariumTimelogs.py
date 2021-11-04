@@ -23,7 +23,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "user_interfaces"))
 if psVersion == 1:
     import AquariumTimelogs_ui
 else:
-    import AquariumTimelogs_ui as AquariumTimelogs_ui
+    import AquariumTimelogs_ui_ps2 as AquariumTimelogs_ui
 
 logger = logging.getLogger(__name__)
 
