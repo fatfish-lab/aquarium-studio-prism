@@ -309,6 +309,30 @@ class Item(Entity):
         result = [self.parent.cast(data['item']) for data in result]
         return result
 
+    def move(self, old_parent_key=None, new_parent_key=None):
+        """
+        Move item from old parent to new parent
+
+        :param      old_parent_key:  The key of the old parent
+        :type       old_parent_key:  string
+        :param      new_parent_key:  The key of the new parent
+        :type       new_parent_key:  string
+
+        :returns:   New item parent and new child edge
+        :rtype:     dictionary {item: :class:`~aquarium.item.Item`,edge: :class:`~aquarium.edge.Edge`}
+        """
+        logger.debug('Move item %s from parent %s to %s',
+                     self._key, old_parent_key, new_parent_key)
+        data = dict(
+            oldParentKey=old_parent_key,
+            newParentKey=new_parent_key
+        )
+
+        result = self.do_request(
+            'PUT', 'items/'+self._key+'/move', data=json.dumps(data))
+        result = self.parent.element(result)
+        return result
+
     def trash(self, parent_key=''):
         """
         Move item from parent item to trash
@@ -358,18 +382,24 @@ class Item(Entity):
             'DELETE', 'items/'+self._key, headers=URL_CONTENT_TYPE)
         return result
 
-    def upload_file(self, path=''):
+    def upload_file(self, path='', data = {}):
         """
         Upload a file on the item
 
         :param      path:  The path of the file to upload
         :type       path:  string
+        :param      data:  The data you want to upload with the file
+        :type       data:  dict
 
         :returns:   item object from API
         :rtype:     dictionary
         """
-        logger.debug('Upload file %s on item %s', path, self._key)
-        files = dict(file=open(path, 'rb'))
+        logger.debug('Upload file %s on item %s with data %s', path, self._key, data)
+
+        files = dict(
+            file=open(path, 'rb'),
+            data=(None, json.dumps(data), 'text/plain')
+        )
         result = self.do_request(
             'POST', 'items/'+self._key+'/upload', headers={'Content-Type': None}, files=files)
         files['file'].close()

@@ -7,7 +7,7 @@ class Asset(Item):
     This class describes an Asset object child of Item class.
     """
 
-    def upload_on_task(self, task_name='', path=''):
+    def upload_on_task(self, task_name='', path='', data={}):
         """
         Uploads new media version on asset task
 
@@ -41,7 +41,7 @@ class Asset(Item):
         if isinstance(media_key, list):
             media_key=media_key[0]
 
-        return self.parent.item(media_key).upload_file(path=path)
+        return self.parent.item(media_key).upload_file(path=path, data=data)
 
     def get_tasks(self, task_name='', task_status=''):
         """

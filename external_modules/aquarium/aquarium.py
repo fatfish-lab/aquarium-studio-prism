@@ -112,7 +112,7 @@ class Aquarium(object):
         """
         value=data
         #As Entity
-        if '_id' in data.keys():
+        if data and '_id' in data.keys():
             id=data.get('_id')
             cls=None
             #As Item
