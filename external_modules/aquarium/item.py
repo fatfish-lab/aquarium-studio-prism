@@ -69,7 +69,7 @@ class Item(Entity):
             }
         }
 
-        if apply_template:
+        if apply_template is not None:
             payload["applyTemplate"] = apply_template
 
         if template_key:
