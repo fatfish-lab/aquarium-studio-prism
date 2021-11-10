@@ -65,12 +65,10 @@ class aqPublish(QDialog, AquariumPublish_ui.Ui_dlg_aqPublish):
             )
             return
 
-        if ptype == "Asset":
-            self.rb_asset.setChecked(True)
-            self.rb_asset.setDown(True)
-        else:
-            self.rb_shot.setChecked(True)
-            self.rb_shot.setDown(True)
+        self.l_item.setText("{labelText} {type}".format(
+            labelText=self.l_item.text(),
+            type=self.ptype.lower()
+        ))
 
         self.updateItems()
         self.navigateToCurrent(shotName, task)
@@ -79,22 +77,25 @@ class aqPublish(QDialog, AquariumPublish_ui.Ui_dlg_aqPublish):
 
     @err_catcher(name=__name__)
     def connectEvents(self):
-        self.rb_asset.pressed.connect(self.updateItems)
-        self.rb_shot.pressed.connect(self.updateItems)
-        # self.b_addTask.clicked.connect(self.createTask)
-        self.b_addTask.setVisible(False)
         self.cb_items.activated.connect(self.updateTasks)
+        self.cb_task.activated.connect(lambda: self.enablePublish())
+        self.cb_task.currentIndexChanged.connect(lambda: self.enablePublish())
         self.b_aqPublish.clicked.connect(self.publish)
 
     @err_catcher(name=__name__)
-    def updateItems(self):
-        if self.rb_asset.isDown():
-            self.aqItems = self.origin.getAqProjectAssets()
-            self.ptype = 'Asset'
-        elif self.rb_shot.isDown():
-            self.ptype = 'Shot'
-            self.aqItems = self.origin.getAqProjectShots()
+    def enablePublish(self):
+        if (self.cb_items.currentData() == "" or self.cb_items.currentData() is None) or (self.cb_task.currentData() == "" or self.cb_task.currentData() is None):
+            self.b_aqPublish.setEnabled(False)
+        else:
+            self.b_aqPublish.setEnabled(True)
 
+    @err_catcher(name=__name__)
+    def updateItems(self):
+        if self.ptype == 'Asset':
+            self.aqItems = self.origin.getAqProjectAssets()
+        elif self.ptype == 'Shot':
+            self.aqItems = self.origin.getAqProjectShots()
+        
         self.cb_items.clear()
         self.itemList = {}
         if (len(self.aqItems) == 0):
@@ -137,30 +138,33 @@ class aqPublish(QDialog, AquariumPublish_ui.Ui_dlg_aqPublish):
             self.cb_task.addItem("No {itemType} is selected in the list".format(
                 itemType=self.ptype
             ), None)
+            self.cb_task.setEnabled(False)
+            self.enablePublish()
             return
 
         if (self.itemList[itemKey]):
+            self.cb_task.setEnabled(True)
             publishItem = self.itemList[itemKey]
-            if (publishItem is None):
-                return
-            self.aqTasks = publishItem['tasks']
-            
-            if (len(self.aqTasks) == 0):
-                self.cb_task.addItem("The {itemType} {itemName} has no tasks".format(
-                    itemType=self.itemList[itemKey]['item'].type,
-                    itemName=self.itemList[itemKey]['item'].data.name
-                ), None)
-            else:
-                self.cb_task.addItem('Choose a task', None)
+            if (publishItem is not None):
+                self.aqTasks = publishItem['tasks']
+                
+                if (len(self.aqTasks) == 0):
+                    self.cb_task.addItem("The {itemType} {itemName} has no tasks".format(
+                        itemType=self.itemList[itemKey]['item'].type,
+                        itemName=self.itemList[itemKey]['item'].data.name
+                    ), None)
+                else:
+                    self.cb_task.addItem('Choose a task', None)
 
-            for task in self.aqTasks:
-                self.cb_task.addItem(task.data.name, task._key)
+                for task in self.aqTasks:
+                    self.cb_task.addItem(task.data.name, task._key)
             
         else:
             self.origin.messageInfo(
                 message = "Can't find the %s in the list." % self.ptype,
                 title = "Aquarium studio publish")
-            return
+        
+        self.enablePublish()
 
     # 	@err_catcher(name=__name__)
     # 	def createTask(self):
@@ -282,8 +286,6 @@ class aqPublish(QDialog, AquariumPublish_ui.Ui_dlg_aqPublish):
 
     def enableWidgets (self, enable= True):
         self.b_aqPublish.setEnabled(enable)
-        self.rb_asset.setEnabled(enable)
-        self.rb_shot.setEnabled(enable)
         self.cb_items.setEnabled(enable)
         self.cb_task.setEnabled(enable)
         self.te_description.setEnabled(enable)
@@ -351,8 +353,6 @@ class UploadWorker(QObject):
             ffmpegPath = os.path.join(self.origin.core.prismLibs, "Tools", "ffmpeg")
             if os.path.exists(ffmpegPath):
                 isffmpegInstalled = True
-
-        logger.debug('ffmpeg %s', isffmpegInstalled)
 
         for source in self.origin.fileSources:
             fileToUpload = None
@@ -473,7 +473,8 @@ class UploadWorker(QObject):
                     self.upload(
                         item = self.origin.itemList[curShotId]['item'],
                         taskName = self.origin.cb_task.currentText(),
-                        filePath = fileToUpload
+                        filePath = fileToUpload,
+                        message = self.origin.te_description.toPlainText()
                     )
                     self.uploaded.emit()
 
@@ -528,10 +529,23 @@ class UploadWorker(QObject):
         
         self.finished.emit(self.published)
 
-    def upload(self, item, taskName, filePath):
+    def upload(self, item, taskName, filePath, message):
         self.uploading.emit()
         try:
-            item.upload_on_task(task_name=taskName, path=filePath)
+            filename, ext = os.path.splitext(os.path.basename(filePath))
+            data = {
+                "name": filename
+            }
+            upload = item.upload_on_task(task_name=taskName, path=filePath, data=data, message=message)
+            logger.debug('Upload %s', upload)
+            if (self.origin.ck_thumbnail.isChecked()):
+                if (upload):
+                    media = self.origin.origin.aq.cast(upload)
+                    if (media):
+                        item.update_data(data={'thumbnail': media.data.thumbnail})
+                else:
+                    logger.warning("No upload data from Aquarium.")
+                
         except Exception as e:
             logger.warning("Error during upload:\n\n%s" % e)
-            self.error.emit()
+            self.error.emit(e)
