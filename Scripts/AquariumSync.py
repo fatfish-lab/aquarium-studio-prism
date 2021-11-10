@@ -562,11 +562,11 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                         elif action == 'move':
                             try:
                                 if item and parent and itemLocation:
-                                    data[-1] = 'Move is not yet implemented.'
-                                    # item.move(
-                                    #     old_parent_key=parent._key,
-                                    #     new_parent_key=itemLocation
-                                    # )
+                                    item.move(
+                                        old_parent_key=parent._key,
+                                        new_parent_key=itemLocation
+                                    )
+                                    data[-1] = True
                                 else:
                                     data[-1] = "Can't find the item to move it under parent"
                             except Exception as e:
