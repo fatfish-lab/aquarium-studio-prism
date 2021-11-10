@@ -382,14 +382,16 @@ class Item(Entity):
             'DELETE', 'items/'+self._key, headers=URL_CONTENT_TYPE)
         return result
 
-    def upload_file(self, path='', data = {}):
+    def upload_file(self, path='', data = {}, message = None):
         """
         Upload a file on the item
 
         :param      path:  The path of the file to upload
         :type       path:  string
-        :param      data:  The data you want to upload with the file
+        :param      data:  The data you want to upload with the file, optional
         :type       data:  dict
+        :param      message:  The message associated with the upload, optional
+        :type       message:  string
 
         :returns:   item object from API
         :rtype:     dictionary
@@ -398,7 +400,8 @@ class Item(Entity):
 
         files = dict(
             file=open(path, 'rb'),
-            data=(None, json.dumps(data), 'text/plain')
+            data=(None, json.dumps(data), 'text/plain'),
+            message=(None, message, 'text/plain')
         )
         result = self.do_request(
             'POST', 'items/'+self._key+'/upload', headers={'Content-Type': None}, files=files)
