@@ -171,11 +171,14 @@ class Prism_Aquarium_Functions(object):
         origin.l_aqProjectChanged = QLabel('')
         origin.l_aqProjectChanged.setStyleSheet("color: #f03e3e;")
         origin.c_aqAssetsLocation = QComboBox()
-        origin.c_aqAssetsLocation.addItem("Select an Aquarium's project first", None)
+        origin.c_aqAssetsLocation.addItem("Select an Aquarium's project first",
+            self.core.getConfig('aquarium', 'assetslocationkey', configPath=self.core.prismIni, dft=None))
         origin.c_aqShotsLocation = QComboBox()
-        origin.c_aqShotsLocation.addItem("Select an Aquarium's project first", None)
+        origin.c_aqShotsLocation.addItem("Select an Aquarium's project first",
+            self.core.getConfig('aquarium', 'shotslocationkey', configPath=self.core.prismIni, dft=None))
         origin.c_aqTimelogsLocation = QComboBox()
-        origin.c_aqTimelogsLocation.addItem("Select an Aquarium's project first", None)
+        origin.c_aqTimelogsLocation.addItem("Select an Aquarium's project first",
+            self.core.getConfig('aquarium', 'timelogslocationkey', configPath=self.core.prismIni, dft=None))
         origin.e_aqStepParameter = QLineEdit()
         origin.e_aqStepParameter.setPlaceholderText('If blank item.data.name will be used')
         origin.b_aqConnectUser = QPushButton('Save and go to "User" tab to add your Aquarium credentials')
