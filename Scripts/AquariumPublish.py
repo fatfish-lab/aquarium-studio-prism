@@ -196,6 +196,8 @@ class aqPublish(QDialog, AquariumPublish_ui.Ui_dlg_aqPublish):
         idx = self.cb_task.findText(task)
         if idx != -1:
             self.cb_task.setCurrentIndex(idx)
+        
+        self.enablePublish()
 
     @err_catcher(name=__name__)
     def enterEvent(self, event):
