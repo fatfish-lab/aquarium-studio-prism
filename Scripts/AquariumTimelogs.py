@@ -117,6 +117,41 @@ class aqTimelogs(QDialog, AquariumTimelogs_ui.Ui_dlg_aqTimelogs):
 
         self.b_createtimelogs.setEnabled(False)
 
+        self.cb_projects.currentIndexChanged.connect(
+            lambda: self.loadTimelogsLinkTo()
+        )
+
+        connected = self.origin.connectToAquarium()
+        
+        if connected:
+            projects = self.origin.getAqProjects()
+            
+            for project in projects:
+                self.cb_projects.addItem(project['name'], project['_key'])
+            if (self.origin.aqProject):
+                index = self.cb_projects.findData(self.origin.aqProject._key)
+                if index >= 0:
+                    self.cb_projects.setCurrentIndex(index)
+                else:
+                    self.cb_projects.addItem('Select a project', None)
+
+            self.loadTimelogsLinkTo()
+        else:
+            self.origin.messageWarning(
+                message="You are not connected to Aquarium Studio. Please check your settings.",
+                title="Aquarium studio timelogs"
+            )
+
+        self.connectEvents()
+        self.refresh()
+    
+    @err_catcher(name=__name__)
+    def loadTimelogsLinkTo(self):
+        selectedProjectKey = self.cb_projects.currentData()
+        timelogLocation = self.origin.getTimelogsLocation()
+        if selectedProjectKey != self.origin.aqProject._key:
+            timelogLocation = selectedProjectKey
+
         aliases = {
             "view": {
                 "name": "item.data.name",
@@ -124,10 +159,7 @@ class aqTimelogs(QDialog, AquariumTimelogs_ui.Ui_dlg_aqTimelogs):
             }
         }
 
-        connected = self.origin.connectToAquarium()
-        if connected:
-            timelogLocation = self.origin.getTimelogsLocation()
-            
+        if timelogLocation:
             self.timelogsTemplates = self.origin.aq.item(timelogLocation).traverse(meshql="# -($Child)> $Template AND item.data.templateData.type == 'Job' VIEW $view", aliases=aliases)
 
             self.cb_templates.clear()
@@ -137,17 +169,9 @@ class aqTimelogs(QDialog, AquariumTimelogs_ui.Ui_dlg_aqTimelogs):
             if len(self.timelogsTemplates) > 0:
                 self.cb_templates.setCurrentIndex(1)
 
-            self.cb_linkto.addItem(self.origin.aqProject.data.name, timelogLocation)
-        else:
-            self.origin.messageWarning(
-                message="You are not connected to Aquarium Studio. Please check your settings.",
-                title="Aquarium studio timelogs"
-            )
+            self.cb_linkto.clear()
+            self.cb_linkto.addItem('Default location', timelogLocation)
 
-        self.connectEvents()
-        self.refresh()
-
-    
     @err_catcher(name=__name__)
     def connectEvents(self):
         self.c_calendar.currentPageChanged.connect(lambda year, int: self.refresh())

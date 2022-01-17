@@ -112,49 +112,49 @@
         <attribute name="title">
          <string>Add timelogs</string>
         </attribute>
-        <layout class="QGridLayout" name="gridLayout_4">
+        <layout class="QGridLayout" name="gridLayout_3">
          <item row="0" column="0">
-          <layout class="QGridLayout" name="gridLayout_3">
-           <item row="0" column="0">
-            <layout class="QVBoxLayout" name="verticalLayout_5">
+          <layout class="QVBoxLayout" name="verticalLayout_5">
+           <item>
+            <layout class="QHBoxLayout" name="horizontalLayout_4">
              <item>
-              <layout class="QHBoxLayout" name="horizontalLayout_4">
-               <item>
-                <widget class="QLabel" name="l_selecteddates">
-                 <property name="text">
-                  <string>Selected dates :</string>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <spacer name="horizontalSpacer_2">
-                 <property name="orientation">
-                  <enum>Qt::Horizontal</enum>
-                 </property>
-                 <property name="sizeHint" stdset="0">
-                  <size>
-                   <width>40</width>
-                   <height>20</height>
-                  </size>
-                 </property>
-                </spacer>
-               </item>
-               <item>
-                <widget class="QPushButton" name="b_cleardates">
-                 <property name="text">
-                  <string>Clear dates</string>
-                 </property>
-                </widget>
-               </item>
-              </layout>
+              <widget class="QLabel" name="l_selecteddates">
+               <property name="text">
+                <string>Selected dates :</string>
+               </property>
+              </widget>
              </item>
              <item>
-              <widget class="QListView" name="lv_selecteddates"/>
+              <spacer name="horizontalSpacer_2">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+             <item>
+              <widget class="QPushButton" name="b_cleardates">
+               <property name="text">
+                <string>Clear dates</string>
+               </property>
+              </widget>
              </item>
             </layout>
            </item>
-           <item row="0" column="1">
-            <layout class="QVBoxLayout" name="verticalLayout">
+           <item>
+            <widget class="QListView" name="lv_selecteddates"/>
+           </item>
+          </layout>
+         </item>
+         <item row="0" column="1">
+          <layout class="QVBoxLayout" name="verticalLayout">
+           <item>
+            <layout class="QVBoxLayout" name="verticalLayout_4">
              <item>
               <widget class="QLabel" name="l_linkto">
                <property name="styleSheet">
@@ -166,86 +166,117 @@
               </widget>
              </item>
              <item>
-              <widget class="QComboBox" name="cb_linkto"/>
-             </item>
-             <item>
-              <widget class="QLabel" name="label">
-               <property name="styleSheet">
-                <string notr="true">color: #339af0;</string>
-               </property>
-               <property name="text">
-                <string>with duration :</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <layout class="QHBoxLayout" name="horizontalLayout_3">
+              <layout class="QHBoxLayout" name="horizontalLayout_7">
                <item>
-                <widget class="QLabel" name="l_day">
+                <widget class="QLabel" name="l_linktoProject">
+                 <property name="styleSheet">
+                  <string notr="true">color: #339af0;</string>
+                 </property>
                  <property name="text">
-                  <string>Day</string>
+                  <string>this project :</string>
                  </property>
                 </widget>
                </item>
                <item>
-                <widget class="QDoubleSpinBox" name="sb_day"/>
-               </item>
-               <item>
-                <widget class="QLabel" name="l_hour">
+                <widget class="QLabel" name="l_linktoItem">
+                 <property name="styleSheet">
+                  <string notr="true">color: #339af0;</string>
+                 </property>
                  <property name="text">
-                  <string>Hour</string>
+                  <string>on item :</string>
                  </property>
                 </widget>
-               </item>
-               <item>
-                <widget class="QDoubleSpinBox" name="sb_hour"/>
-               </item>
-               <item>
-                <widget class="QLabel" name="l_minute">
-                 <property name="text">
-                  <string>Minute</string>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QDoubleSpinBox" name="sb_minute"/>
                </item>
               </layout>
              </item>
              <item>
-              <widget class="QLabel" name="l_timelogType">
-               <property name="styleSheet">
-                <string notr="true">color: #339af0;</string>
-               </property>
-               <property name="text">
-                <string>using this template :</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QComboBox" name="cb_templates"/>
-             </item>
-             <item>
-              <spacer name="verticalSpacer">
-               <property name="orientation">
-                <enum>Qt::Vertical</enum>
-               </property>
-               <property name="sizeHint" stdset="0">
-                <size>
-                 <width>20</width>
-                 <height>40</height>
-                </size>
-               </property>
-              </spacer>
-             </item>
-             <item>
-              <widget class="QPushButton" name="b_createtimelogs">
-               <property name="text">
-                <string>Create timelogs</string>
-               </property>
-              </widget>
+              <layout class="QHBoxLayout" name="horizontalLayout_6">
+               <item>
+                <widget class="QComboBox" name="cb_projects"/>
+               </item>
+               <item>
+                <widget class="QComboBox" name="cb_linkto"/>
+               </item>
+              </layout>
              </item>
             </layout>
+           </item>
+           <item>
+            <widget class="QLabel" name="label">
+             <property name="styleSheet">
+              <string notr="true">color: #339af0;</string>
+             </property>
+             <property name="text">
+              <string>with duration :</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="horizontalLayout_3">
+             <item>
+              <widget class="QLabel" name="l_day">
+               <property name="text">
+                <string>Day</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QDoubleSpinBox" name="sb_day"/>
+             </item>
+             <item>
+              <widget class="QLabel" name="l_hour">
+               <property name="text">
+                <string>Hour</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QDoubleSpinBox" name="sb_hour"/>
+             </item>
+             <item>
+              <widget class="QLabel" name="l_minute">
+               <property name="text">
+                <string>Minute</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QDoubleSpinBox" name="sb_minute"/>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <widget class="QLabel" name="l_timelogType">
+             <property name="styleSheet">
+              <string notr="true">color: #339af0;</string>
+             </property>
+             <property name="text">
+              <string>using this template :</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QComboBox" name="cb_templates"/>
+           </item>
+           <item>
+            <spacer name="verticalSpacer">
+             <property name="orientation">
+              <enum>Qt::Vertical</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>20</width>
+               <height>40</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+           <item>
+            <widget class="QPushButton" name="b_createtimelogs">
+             <property name="text">
+              <string>Create timelogs</string>
+             </property>
+            </widget>
            </item>
           </layout>
          </item>
