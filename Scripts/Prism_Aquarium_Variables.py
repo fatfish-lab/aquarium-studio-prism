@@ -33,7 +33,7 @@
 
 class Prism_Aquarium_Variables(object):
     def __init__(self, core, plugin):
-        self.version = "v1.0.8"
+        self.version = "v1.0.9"
         self.pluginName = "Aquarium Studio"
         self.pluginType = "ProjectManager"
         self.platforms = ["Windows", "Linux", "Darwin"]
