@@ -314,7 +314,7 @@ class aqTimelogs(QDialog, AquariumTimelogs_ui.Ui_dlg_aqTimelogs):
                 performedAt = datetime.datetime(date.year(), date.month(), date.day(), 0, 0, 0, 0)
                 data = {
                     'name': 'Job for {name}'.format(
-                        name=self.cb_linkto.currentText()
+                        name=self.cb_projects.currentText()
                     ),
                     'duration': 'P{days}{time}{hours}{minutes}'.format(
                         days = '{days}D'.format(days=days) if days > 0 else '',
