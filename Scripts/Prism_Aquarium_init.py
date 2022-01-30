@@ -76,7 +76,7 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
 
         if (self.aq == None): self.aq = aquarium.Aquarium(api_url=aqSite, token=token)
 
-        if (token == None or len(token) == 0):
+        if (token == None or len(token) == 0) or password != None or (password != None and len(password) > 0):
             try:
                 if (email and password):
                     self.aq.connect(email=email, password=password)
