@@ -240,7 +240,7 @@ class aqTimelogs(QDialog, AquariumTimelogs_ui.Ui_dlg_aqTimelogs):
                 'view': {
                     'item': 'item',
                     'parent': 'parents[0]',
-                    'mainParent': 'parents[1]'
+                    'mainParent': 'parents[1].data.name'
                 }
             }
             timelogs = self.origin.aq.query(query, aliases)
@@ -248,7 +248,7 @@ class aqTimelogs(QDialog, AquariumTimelogs_ui.Ui_dlg_aqTimelogs):
             self.timelogs = [{
                 'item': self.origin.aq.cast(timelog['item']),
                 'parent': self.origin.aq.cast(timelog['parent']),
-                'mainParent': self.origin.aq.cast(timelog['mainParent'])
+                'mainParent': timelog['mainParent']
             } for timelog in timelogs]
 
             self.refreshCalendar()
@@ -264,7 +264,7 @@ class aqTimelogs(QDialog, AquariumTimelogs_ui.Ui_dlg_aqTimelogs):
         timelogs = []
         for timelog in self.timelogs:
             timelogs.append([
-                timelog['mainParent'].data.name,
+                timelog['mainParent'],
                 timelog['parent'].data.name,
                 timelog['item'].data.name,
                 timelog['item'].data.duration,
