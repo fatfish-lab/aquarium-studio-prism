@@ -117,10 +117,6 @@ class aqTimelogs(QDialog, AquariumTimelogs_ui.Ui_dlg_aqTimelogs):
 
         self.b_createtimelogs.setEnabled(False)
 
-        self.cb_projects.currentIndexChanged.connect(
-            lambda: self.loadTimelogsLinkTo()
-        )
-
         connected = self.origin.connectToAquarium()
         
         if connected:
@@ -142,15 +138,31 @@ class aqTimelogs(QDialog, AquariumTimelogs_ui.Ui_dlg_aqTimelogs):
                 title="Aquarium studio timelogs"
             )
 
+        self.cb_projects.currentIndexChanged.connect(
+            lambda: self.loadTimelogsLinkTo()
+        )
+
         self.connectEvents()
         self.refresh()
     
     @err_catcher(name=__name__)
     def loadTimelogsLinkTo(self):
         selectedProjectKey = self.cb_projects.currentData()
-        timelogLocation = self.origin.getTimelogsLocation()
-        if selectedProjectKey != self.origin.aqProject._key:
-            timelogLocation = selectedProjectKey
+        project = self.origin.getAqProject(projectKey=selectedProjectKey)
+
+        if (project and project.prism and project.prism['properties'] and project.prism['properties']['timelogDuration']) :
+            timelogDuration = project.prism['properties']['timelogDuration']
+            self.sb_day.setEnabled(True) if ('day' in timelogDuration) else self.sb_day.setEnabled(False)
+            self.sb_hour.setEnabled(True) if ('hour' in timelogDuration) else self.sb_hour.setEnabled(False)
+            self.sb_minute.setEnabled(True) if ('minute' in timelogDuration) else self.sb_minute.setEnabled(False)
+
+        else :
+            self.sb_day.setEnabled(True)
+            self.sb_hour.setEnabled(True)
+            self.sb_minute.setEnabled(True)
+
+
+        timelogLocation = self.origin.getTimelogsLocation(project = project)
 
         aliases = {
             "view": {

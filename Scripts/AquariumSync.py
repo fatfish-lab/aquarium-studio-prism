@@ -280,7 +280,7 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
 
         self.core.entities.refreshOmittedEntities()
         location = self.origin.getAssetsLocation()
-        steps = dict(self.origin.core.getConfig("globals", "pipeline_steps", configPath=self.origin.core.prismIni))
+        steps = self.origin.aqProject.prism['properties']['steps']
 
         for assetName, parentFolderName, prismFolderName, prismAssetName in prismAssets:
             if prismAssetName not in self.core.entities.omittedEntities["asset"]:
@@ -294,11 +294,11 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                         shotPrismSteps = self.core.entities.getSteps(asset=prismAssetName)
 
                         for step in shotPrismSteps:
-                            if step in steps.keys():
-                                shotPrismCategories = self.core.entities.getCategories(asset=prismAssetName, step=step)
+                            if step in steps:
+                                shotPrismCategories = self.core.entities.getCategories(asset=prismAssetName, step=step['name'])
                                 for category in shotPrismCategories:
                                     if category not in tasksName:
-                                        categories.append([step, category])
+                                        categories.append([step['name'], category])
 
                         if len(categories) > 0:
                             parentName = parent.data.name if parent._key != location else 'Root location'
@@ -319,7 +319,7 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
             break
 
         self.core.entities.refreshOmittedEntities()
-        steps = dict(self.origin.core.getConfig("globals", "pipeline_steps", configPath=self.origin.core.prismIni))
+        steps = self.origin.aqProject.prism['properties']['steps']
         localShots = []
         for prismShotName in foldercont[1]:
             if not prismShotName.startswith("_") and prismShotName not in self.core.entities.omittedEntities["shot"]:
@@ -342,11 +342,11 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                     item = self.aqItems[prismShotName]['item']
 
                     for step in shotPrismSteps:
-                        if step in steps.keys():
-                            shotPrismCategories = self.core.entities.getCategories(shot=prismShotName, step=step)
+                        if step in steps:
+                            shotPrismCategories = self.core.entities.getCategories(shot=prismShotName, step=step['name'])
                             for category in shotPrismCategories:
                                 if category not in tasksName:
-                                    categories.append([step, category])
+                                    categories.append([step['name'], category])
 
                     parentName = parent.data.name if parent._key != location else 'Root location'
                     if len(categories) > 0:
@@ -369,7 +369,7 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
     def aqAssetsToPrism(self): 
         assetsToCreate = []
         
-        steps = dict(self.origin.core.getConfig("globals", "pipeline_steps", configPath=self.origin.core.prismIni))
+        steps = self.origin.aqProject.prism['properties']['steps']
         for asset in self.aqItems:
             item = self.aqItems[asset]['item']
             parent = self.aqItems[asset]['parent']
@@ -383,15 +383,15 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
             
             categories = []
             for task in tasks:
-                taskSteps = (step for step, categories in steps.items() if task.data.name in categories)
+                taskSteps = (step for step in steps if task.data.name in step['categories'])
                 taskStep = next(taskSteps, None)
                 if taskStep:
                     if action is None:
-                        catPath = self.core.getEntityPath(asset=prismId, step=taskStep, category=task.data.name)
+                        catPath = self.core.getEntityPath(asset=prismId, step=taskStep['name'], category=task.data.name)
                         if not os.path.exists(catPath):
-                            categories.append([taskStep, task.data.name])
+                            categories.append([taskStep['name'], task.data.name])
                     elif action == 'create':
-                        categories.append([taskStep, task.data.name])
+                        categories.append([taskStep['name'], task.data.name])
 
             if len(categories) > 0 and action is None:
                 action = 'update'
@@ -407,7 +407,7 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
     def aqShotsToPrism(self):    
         shotsToCreate = []
 
-        steps = dict(self.origin.core.getConfig("globals", "pipeline_steps", dft={}, configPath=self.origin.core.prismIni))
+        steps = self.origin.aqProject.prism['properties']['steps']
         for shot in self.aqItems:
             item = self.aqItems[shot]['item']
             parent = self.aqItems[shot]['parent']
@@ -422,15 +422,15 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
             categories = []
             updates = []
             for task in tasks:
-                taskSteps = (step for step, categories in steps.items() if task.data.name in categories)
+                taskSteps = (step for step in steps if task.data.name in step['categories'])
                 taskStep = next(taskSteps, None)
                 if taskStep:
                     if action is None:
-                        catPath = self.core.getEntityPath(shot=prismId, step=taskStep, category=task.data.name)
+                        catPath = self.core.getEntityPath(shot=prismId, step=taskStep['name'], category=task.data.name)
                         if not os.path.exists(catPath):
-                            categories.append([taskStep, task.data.name])
+                            categories.append([taskStep['name'], task.data.name])
                     elif action == 'create':
-                        categories.append([taskStep, task.data.name])
+                        categories.append([taskStep['name'], task.data.name])
 
             if len(categories) > 0 and action is None:
                 action = 'update'

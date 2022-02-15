@@ -93,7 +93,7 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
 
         connected = self.getAqCurrentUser()
 
-        self.getAqProject()
+        self.aqProject = self.getAqProject()
         
         return connected
 
@@ -109,24 +109,39 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
 
     @err_catcher(name=__name__)
     def getAqProject(self, projectKey = None):
+        aqProject = None
         if (not projectKey): projectKey = self.core.getConfig(
                 "aquarium", "projectkey", configPath=self.core.prismIni
             )
         if (projectKey):
             try:
                 if (self.aqProject and self.aqProject._key == projectKey):
-                    pass
+                    return self.aqProject
                 else:
                     aqProject = self.aq.item(projectKey).get()
-                    self.aqProject = aqProject
+                    aqProject.prism = dict(
+                        properties=None,
+                        assetsLocation=None,
+                        shotsLocation=None,
+                        timelogsLocation=None
+                    )
 
-                    query = '# -($Child, 3)> $Group OR $Project VIEW item'
-                    locations = self.aqProject.traverse(meshql=query)
-                    self.aqProjectLocations = [self.aq.cast(item) for item in locations]
+                    queryProperties = '# -($Child)> 0,1 $Properties AND item.data.prism != null VIEW item.data.prism'
+                    prismProperties = aqProject.traverse(meshql=queryProperties)
+                    if (prismProperties and len(prismProperties) > 0): aqProject.prism['properties'] = prismProperties[0]
+                    
+                    queryLocations = '# -()> * AND edge.type IN ["PrismAssetsLocation", "PrismShotsLocation", "PrismTimelogsLocation"]'
+                    locations = aqProject.traverse(meshql=queryLocations)
+                    for l in locations:
+                        location = self.aq.element(l)
+                        if location.edge.type == 'PrismAssetsLocation': aqProject.prism['assetsLocation'] = location.item._key
+                        elif location.edge.type == 'PrismShotsLocation': aqProject.prism['shotsLocation'] = location.item._key
+                        elif location.edge.type == 'PrismTimelogsLocation': aqProject.prism['timelogsLocation'] = location.item._key
+
             except Exception as e:
                 logger.warning("Could not access to project:\n\n%s" % e)
-        else:
-            self.aqProject = None
+
+        return aqProject
 
     @err_catcher(name=__name__)
     def getAqProjects(self):
@@ -144,26 +159,34 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
         return projects
 
     @err_catcher(name=__name__)
-    def getShotsLocation (self):
-        location = self.core.getConfig('aquarium', 'shotslocationkey', configPath=self.core.prismIni)
-        if not location: location = self.aqProject._key
+    def getShotsLocation (self, project = None):
+        if (project == None): project = self.aqProject
+
+        location = project.prism['shotsLocation']
+        if not location: location = project._key
         return location
 
     @err_catcher(name=__name__)
-    def getAssetsLocation (self):
-        location = self.core.getConfig('aquarium', 'assetslocationkey', configPath=self.core.prismIni)
-        if not location: location = self.aqProject._key
+    def getAssetsLocation (self, project = None):
+        if (project == None): project = self.aqProject
+
+        location = project.prism['assetsLocation']
+        if not location: location = project._key
         return location
 
     @err_catcher(name=__name__)
-    def getTimelogsLocation (self):
-        location = self.core.getConfig('aquarium', 'timelogslocationkey', configPath=self.core.prismIni)
-        if not location: location = self.aqProject._key
+    def getTimelogsLocation (self, project = None):
+        if (project == None): project = self.aqProject
+
+        location = project.prism['timelogsLocation']
+        if not location: location = project._key
         return location
 
     @err_catcher(name=__name__)
-    def getAqProjectAssets(self):
-        startpoint = self.getAssetsLocation()
+    def getAqProjectAssets(self, project = None):
+        if (project == None): project = self.aqProject
+
+        startpoint = self.getAssetsLocation(project = project)
         query = "# -($Child, 3)> $Asset AND path.edges[*].data.hidden != true VIEW $view"
         aliases = {
             "view": {
@@ -183,8 +206,10 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
         return assets
 
     @err_catcher(name=__name__)
-    def getAqProjectShots(self):
-        startpoint = self.getShotsLocation()
+    def getAqProjectShots(self, project = None):
+        if (project == None): project = self.aqProject
+
+        startpoint = self.getShotsLocation(project = project)
         query = "# -($Child, 3)> $Shot AND path.edges[*].data.hidden != true VIEW $view"
         aliases = {
             "view": {

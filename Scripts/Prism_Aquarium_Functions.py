@@ -152,12 +152,6 @@ class Prism_Aquarium_Functions(object):
 
         origin.l_aqSite = QLabel("Aquarium Studio site:")
         origin.l_aqProject = QLabel("Aquarium project:")
-        origin.l_aqLocation = QLabel("On Aquarium, where do you want to store your shots and assets ?")
-        origin.l_aqLocation.setStyleSheet("color: #339af0;")
-        origin.l_aqAssetsLocation = QLabel("Assets location:")
-        origin.l_aqShotsLocation = QLabel("Shots location:")
-        origin.l_aqTimelogsLocation = QLabel("Timelogs location:")
-        origin.l_aqStepParameter = QLabel("Step parameter:")
         
         origin.e_aqSite = QLineEdit()
         origin.c_aqProject = QComboBox()
@@ -170,17 +164,6 @@ class Prism_Aquarium_Functions(object):
         )
         origin.l_aqProjectChanged = QLabel('')
         origin.l_aqProjectChanged.setStyleSheet("color: #f03e3e;")
-        origin.c_aqAssetsLocation = QComboBox()
-        origin.c_aqAssetsLocation.addItem("Select an Aquarium's project first",
-            self.core.getConfig('aquarium', 'assetslocationkey', configPath=self.core.prismIni, dft=None))
-        origin.c_aqShotsLocation = QComboBox()
-        origin.c_aqShotsLocation.addItem("Select an Aquarium's project first",
-            self.core.getConfig('aquarium', 'shotslocationkey', configPath=self.core.prismIni, dft=None))
-        origin.c_aqTimelogsLocation = QComboBox()
-        origin.c_aqTimelogsLocation.addItem("Select an Aquarium's project first",
-            self.core.getConfig('aquarium', 'timelogslocationkey', configPath=self.core.prismIni, dft=None))
-        origin.e_aqStepParameter = QLineEdit()
-        origin.e_aqStepParameter.setPlaceholderText('If blank item.data.name will be used')
         origin.b_aqConnectUser = QPushButton('Save and go to "User" tab to add your Aquarium credentials')
         origin.b_aqConnectUser.clicked.connect(
             lambda: self.goToUserSettings(origin)
@@ -188,21 +171,12 @@ class Prism_Aquarium_Functions(object):
         
         lo_aq.addWidget(origin.l_aqSite, 0, 0)
         lo_aq.addWidget(origin.l_aqProject, 2, 0)
-        lo_aq.addWidget(origin.l_aqLocation, 4, 0)
-        lo_aq.addWidget(origin.l_aqAssetsLocation, 5, 0)
-        lo_aq.addWidget(origin.l_aqShotsLocation, 6, 0)
-        lo_aq.addWidget(origin.l_aqTimelogsLocation, 7, 0)
-        #lo_aq.addWidget(origin.l_aqStepParameter, 3, 0)
         
         lo_aq.addWidget(origin.e_aqSite, 0, 1)
         lo_aq.addWidget(origin.b_aqConnectUser, 1, 1)
         lo_aq.addWidget(origin.c_aqProject, 2, 1)
         lo_aq.addWidget(origin.b_aqRefreshProjects, 2, 2)
         lo_aq.addWidget(origin.l_aqProjectChanged, 3, 1)
-        lo_aq.addWidget(origin.c_aqAssetsLocation, 5, 1)
-        lo_aq.addWidget(origin.c_aqShotsLocation, 6, 1)
-        lo_aq.addWidget(origin.c_aqTimelogsLocation, 7, 1)
-        #lo_aq.addWidget(origin.e_aqStepParameter, 3, 1)
 
         num = origin.w_prjSettings.layout().count() - 1
         origin.w_prjSettings.layout().insertWidget(num, origin.gb_aqPrjIntegration)
@@ -228,9 +202,6 @@ class Prism_Aquarium_Functions(object):
                 origin.e_aqSite.setText(settings["aquarium"]["site"])
 
             self.listAqProjects(origin)
-            
-            if "stepparameter" in settings["aquarium"]:
-                origin.e_aqStepParameter.setText(settings["aquarium"]["stepparameter"])
 
         self.prismSettings_aqToggled(origin, origin.gb_aqPrjIntegration.isChecked())
 
@@ -252,10 +223,6 @@ class Prism_Aquarium_Functions(object):
         settings["aquarium"]["active"] = origin.gb_aqPrjIntegration.isChecked()
         settings["aquarium"]["site"] = origin.e_aqSite.text()
         settings["aquarium"]["projectkey"] = origin.c_aqProject.currentData()
-        settings["aquarium"]["stepparameter"] = origin.e_aqStepParameter.text()
-        settings["aquarium"]["assetslocationkey"] = origin.c_aqAssetsLocation.currentData()
-        settings["aquarium"]["shotslocationkey"] = origin.c_aqShotsLocation.currentData()
-        settings["aquarium"]["timelogslocationkey"] = origin.c_aqTimelogsLocation.currentData()
         
         origin.l_aqProjectChanged.setText("")
 
@@ -300,6 +267,7 @@ class Prism_Aquarium_Functions(object):
     @err_catcher(name=__name__)
     def prismSettings_aqToggled(self, origin, checked):
         origin.w_aquarium.setVisible(checked)
+        # origin.gb_aqAccount.setVisible(checked)
 
     @err_catcher(name=__name__)
     def pbBrowser_getMenu(self, origin):
@@ -464,35 +432,8 @@ class Prism_Aquarium_Functions(object):
     def changeAqProject(self, origin):
         currentProjectKey = self.core.getConfig('aquarium', 'projectkey', configPath=self.core.prismIni)
         if currentProjectKey != origin.c_aqProject.currentData():
-            self.getAqProject(projectKey=origin.c_aqProject.currentData())
+            self.aqProject = self.getAqProject(projectKey=origin.c_aqProject.currentData())
             origin.l_aqProjectChanged.setText("Warning : project changed. Don't forget to save or apply your modifications.")
-            origin.c_aqAssetsLocation.clear()
-            origin.c_aqShotsLocation.clear()
-            origin.c_aqTimelogsLocation.clear()
-            if len(self.aqProjectLocations) > 0:
-                origin.c_aqAssetsLocation.addItem('Choose a folder to store your assets. If empty, project will be used', None)
-                origin.c_aqShotsLocation.addItem('Choose a folder to store your shots. If empty, project will be used', None)
-                origin.c_aqTimelogsLocation.addItem("Choose a folder to store your project's timelogs. If empty, project will be used", None)
-                for location in self.aqProjectLocations:
-                    origin.c_aqAssetsLocation.addItem(location.data.name, location._key)
-                    origin.c_aqShotsLocation.addItem(location.data.name, location._key)
-                    origin.c_aqTimelogsLocation.addItem(location.data.name, location._key)
-                
-                currentAssetsLocation = self.core.getConfig('aquarium', 'assetslocationkey', configPath=self.core.prismIni)
-                if (currentAssetsLocation):
-                    index = origin.c_aqAssetsLocation.findData(currentAssetsLocation)
-                    if index >= 0:
-                        origin.c_aqAssetsLocation.setCurrentIndex(index)
-                currentShotsLocation = self.core.getConfig('aquarium', 'shotslocationkey', configPath=self.core.prismIni)
-                if (currentShotsLocation):
-                    index = origin.c_aqShotsLocation.findData(currentShotsLocation)
-                    if index >= 0:
-                        origin.c_aqShotsLocation.setCurrentIndex(index)
-                currentTimelogsLocation = self.core.getConfig('aquarium', 'timelogslocationkey', configPath=self.core.prismIni)
-                if (currentTimelogsLocation):
-                    index = origin.c_aqTimelogsLocation.findData(currentTimelogsLocation)
-                    if index >= 0:
-                        origin.c_aqTimelogsLocation.setCurrentIndex(index)
         else:
             origin.l_aqProjectChanged.setText("")
 
@@ -512,8 +453,7 @@ class Prism_Aquarium_Functions(object):
     def createAqAssets(self, assets=[], applyTemplate = None):
         createdAssets = []
         connected = self.connectToAquarium()
-        location = self.core.getConfig('aquarium', 'assetslocationkey', configPath=self.core.prismIni)
-        if not location: location = self.aqProject._key
+        location = self.getAssetsLocation()
 
         folders = [self.aq.cast(sequence) for sequence in self.aq.item(location).traverse(meshql='# -($Child)> $Group VIEW item')]
 
