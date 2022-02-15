@@ -164,6 +164,8 @@ class Prism_Aquarium_Functions(object):
         )
         origin.l_aqProjectChanged = QLabel('')
         origin.l_aqProjectChanged.setStyleSheet("color: #f03e3e;")
+        origin.l_aqProjectNoPrismProperties = QLabel('')
+        origin.l_aqProjectNoPrismProperties.setStyleSheet("color: #f76707;")
         origin.b_aqConnectUser = QPushButton('Save and go to "User" tab to add your Aquarium credentials')
         origin.b_aqConnectUser.clicked.connect(
             lambda: self.goToUserSettings(origin)
@@ -177,6 +179,7 @@ class Prism_Aquarium_Functions(object):
         lo_aq.addWidget(origin.c_aqProject, 2, 1)
         lo_aq.addWidget(origin.b_aqRefreshProjects, 2, 2)
         lo_aq.addWidget(origin.l_aqProjectChanged, 3, 1)
+        lo_aq.addWidget(origin.l_aqProjectNoPrismProperties, 4, 1)
 
         num = origin.w_prjSettings.layout().count() - 1
         origin.w_prjSettings.layout().insertWidget(num, origin.gb_aqPrjIntegration)
@@ -225,6 +228,7 @@ class Prism_Aquarium_Functions(object):
         settings["aquarium"]["projectkey"] = origin.c_aqProject.currentData()
         
         origin.l_aqProjectChanged.setText("")
+        origin.l_aqProjectNoPrismProperties.setText("")
 
     @err_catcher(name=__name__)
     def connect (self, origin):
@@ -431,11 +435,16 @@ class Prism_Aquarium_Functions(object):
     @err_catcher(name=__name__)
     def changeAqProject(self, origin):
         currentProjectKey = self.core.getConfig('aquarium', 'projectkey', configPath=self.core.prismIni)
+        self.aqProject = self.getAqProject(projectKey=origin.c_aqProject.currentData())
         if currentProjectKey != origin.c_aqProject.currentData():
-            self.aqProject = self.getAqProject(projectKey=origin.c_aqProject.currentData())
             origin.l_aqProjectChanged.setText("Warning : project changed. Don't forget to save or apply your modifications.")
         else:
             origin.l_aqProjectChanged.setText("")
+
+        if self.aqProject and self.aqProject.prism['properties'] == None:
+            origin.l_aqProjectNoPrismProperties.setText("The project seems to have no configuration for Prism. Please check project's settings on Aquarium Studio")
+        else:
+            origin.l_aqProjectNoPrismProperties.setText("")
 
     @err_catcher(name=__name__)
     def goToUserSettings(self, origin):
