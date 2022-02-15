@@ -32,31 +32,27 @@ To be able to use the plugin in Prism, you have to enable it, in your project Se
 1. Click on the `Signin` button
 1. Go back to the `Project Settings` tab
 1. In the `Aquarium project` list, choose the corresponding Aquarium's project
-1. (optionnal) Choose where on Aquarium you want to store your assets
-1. (optionnal) Choose where on Aquarium you want to store your shots
 1. Don't forget to save your modification by pressing the `Save` or `Apply` button at the bottom of the window
 
-Now, we need to configure the categories of Prism to match the corresponding Aquarium's tasks :
-1. Open your project settings `pipeline.yml` file
-1. Customize the `pipeline_steps` section
-    1. The steps doesn't exist in Aquarium, so can organize and name them as you want
-    1. The categorie names, need to match with the tasks name of your shots and/or assets
-    1. During Aquarium to Prism sync, if a task doesn't exist, the categorie will be ignored
-    1. Configuration example. If you are using our Prism demo project available in Aquarium studio, you can copy the following pipeline_steps : 
-```yml
-  - pipeline_steps: !!omap
-    - 3d:
-      - modeling
-      - rigging
-      - layout
-      - animation
-      - fx
-      - rendering
-    - 2d:
-      - design
-      - texturing
-      - compositing
-```
+Now, we need to configure Prism, directly from Aquarium Studio's web interface :
+
+1. Go to your Aquarium Studio instance
+1. Open the project settings
+1. Go to the `Connectors` tab and click on `Enable connector` for Prism pipeline v1
+
+### Where do you store your assets, shots and timelogs in this project ?
+1. Choose your assets, shots and timelogs locations by picking the folder where you store them.
+
+> - Those parameters are `optionnal`. If you let them empty, the project's will be used instead.
+
+### Prism steps and categories
+1. Drag and drop the `Available tasks` in Prism `steps` to create the categories.
+
+> - In Aquarium, `steps` doesn't exist. So you can organize them as you want
+> - The `categorie names`, need to match with the tasks name of your shots and/or assets to be synced by the connector
+> - During `Aquarium to Prism sync`, if a task doesn't exist, the category will be ignored
+
+> :warning: Don't forget to save the configuration before closing the window
 
 ## Update
 To update your Aquarium Studio plugin for Prism, you can use `git` commands
