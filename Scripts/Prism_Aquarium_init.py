@@ -186,21 +186,38 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
     def getAqProjectAssets(self, project = None):
         if (project == None): project = self.aqProject
 
+        usePrismNamingConvention = False
+        if ('usePrismNamingConvention' in project.prism['properties']) :
+            usePrismNamingConvention = project.prism['properties']['usePrismNamingConvention']
+
         startpoint = self.getAssetsLocation(project = project)
         query = "# -($Child, 3)> $Asset AND path.edges[*].data.hidden != true VIEW $view"
         aliases = {
             "view": {
                 "item": "item",
+                "name": "item.data.name",
                 "parent": "path.vertices[-2]",
-                "parents": "path.vertices",
+                "parentName": "path.vertices[-2].data.name",
+                "parentsName": "path.vertices[*].data.name",
                 "tasks": "# -($Child, 2)> $Task SORT edge.data.weight VIEW item"
             }
         }
+
+        if (usePrismNamingConvention) :
+            aliases['view']['name'] = "SUBSTITUTE(item.data.name, [ '_',' ','-' ], '{separator}' )".format(
+                separator=self.core.sequenceSeparator
+            )
+            aliases['view']['parentName'] = "SUBSTITUTE(path.vertices[-2].data.name, [ '_',' ','-' ], '{separator}' )".format(
+                separator=self.core.sequenceSeparator
+            )
+            aliases['view']['parentsName'] = "JSON_PARSE(SUBSTITUTE(path.vertices[*].data.name, [ '_',' ','-' ], '{separator}' ))".format(
+                separator=self.core.sequenceSeparator
+            )
+
         assets = self.aq.item(startpoint).traverse(meshql=query, aliases=aliases)
 
         for asset in assets:
-            parents = list(map(lambda parent: parent['data']['name'],asset['parents']))[1:-1]
-            prismId = os.path.join(*(parents + [asset['item']['data']['name']]))
+            prismId = os.path.join(*(asset['parentsName'][1:-1] + [asset['name']]))
             asset['prismId'] = prismId
         
         return assets
@@ -209,15 +226,30 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
     def getAqProjectShots(self, project = None):
         if (project == None): project = self.aqProject
 
+        usePrismNamingConvention = False
+        if ('usePrismNamingConvention' in project.prism['properties']) :
+            usePrismNamingConvention = project.prism['properties']['usePrismNamingConvention']
+
         startpoint = self.getShotsLocation(project = project)
         query = "# -($Child, 3)> $Shot AND path.edges[*].data.hidden != true VIEW $view"
         aliases = {
             "view": {
                 "item": "item",
+                "name": "item.data.name",
                 "parent": "path.vertices[-2]",
+                "parentName": "path.vertices[-2].data.name",
                 "tasks": "# -($Child, 2)> $Task SORT edge.data.weight VIEW item"
             }
         }
+
+        if (usePrismNamingConvention):
+            aliases["view"]["name"] = "SUBSTITUTE(item.data.name, [ '_',' ','-' ], '{separator}' )".format(
+                separator=self.core.sequenceSeparator
+            )
+            aliases["view"]["parentName"] = "SUBSTITUTE(path.vertices[-2].data.name, [ '_','-','.',' ' ], '{separator}' )".format(
+                separator='.'
+            )
+
         shots = self.aq.item(startpoint).traverse(meshql=query, aliases=aliases)
         
         for shot in shots:
@@ -225,13 +257,13 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
             if (shot['parent']['_key'] == startpoint):
                 prismId = "{separator}{shotName}".format(
                     separator = self.core.sequenceSeparator,
-                    shotName = shot['item']['data']['name']
+                    shotName = shot['name']
                 )
             else:
                 prismId = "{parentName}{separator}{shotName}".format(
-                    parentName = shot['parent']['data']['name'],
+                    parentName = shot['parentName'],
                     separator = self.core.sequenceSeparator,
-                    shotName = shot['item']['data']['name']
+                    shotName = shot['name']
                 )
             shot['prismId'] = prismId
 

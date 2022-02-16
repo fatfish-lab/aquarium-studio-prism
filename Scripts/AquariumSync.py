@@ -209,7 +209,9 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                     'item': self.origin.aq.cast(asset['item']),
                     'parent': self.origin.aq.cast(asset['parent']),
                     'tasks': [self.origin.aq.cast(task) for task in asset['tasks']],
-                    'prismId': asset['prismId']  
+                    'prismId': asset['prismId'],
+                    'name': asset['name'],
+                    'parentName': asset['parentName'] 
             } for asset in self.origin.getAqProjectAssets()}
         elif self.ptype == 'Shot':
             self.aqItems =  {
@@ -217,7 +219,9 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                     'item': self.origin.aq.cast(shot['item']),
                     'parent': self.origin.aq.cast(shot['parent']),
                     'tasks': [self.origin.aq.cast(task) for task in shot['tasks']],
-                    'prismId': shot['prismId'] 
+                    'prismId': shot['prismId'],
+                    'name': shot['name'],
+                    'parentName': shot['parentName']
             } for shot in self.origin.getAqProjectShots()}
         else:
             self.origin.messageWarning(
@@ -287,7 +291,8 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                 isAssetExist = prismAssetName in self.aqItems
                 if isAssetExist:
                     parent = self.aqItems[prismAssetName]['parent']
-                    isAssetStoredInFolder = parent.data.name == parentFolderName or parent._key == location
+                    parentName = self.aqItems[prismAssetName]['parentName']
+                    isAssetStoredInFolder = parentName == parentFolderName or parent._key == location
                     if isAssetStoredInFolder:
                         categories = []
                         tasksName = list(map(lambda task: task.data.name, self.aqItems[prismAssetName]['tasks']))
@@ -301,7 +306,7 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                                         categories.append([step['name'], category])
 
                         if len(categories) > 0:
-                            parentName = parent.data.name if parent._key != location else 'Root location'
+                            parentName = parentName if parent._key != location else 'Root location'
                             assetsToCreate.append([False, 'update', self.aqItems[prismAssetName]['item']._key, parentName, categories, None, False])
                     else:
                         assetsToCreate.append([False, 'move', self.aqItems[prismAssetName]['item']._key, prismFolderName, 'Do not change categories', None, False])
@@ -334,7 +339,8 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
             isShotExist = prismShotName in self.aqItems
             if isShotExist:
                 parent = self.aqItems[prismShotName]['parent']
-                isShotStoredInFolder = parent.data.name == seqName or parent._key == location
+                parentName = self.aqItems[prismShotName]['parentName']
+                isShotStoredInFolder = parentName == seqName or parent._key == location
                 if isShotStoredInFolder:
                     categories = []
                     tasksName = list(map(lambda task: task.data.name, self.aqItems[prismShotName]['tasks']))
@@ -348,7 +354,7 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                                 if category not in tasksName:
                                     categories.append([step['name'], category])
 
-                    parentName = parent.data.name if parent._key != location else 'Root location'
+                    parentName = parentName if parent._key != location else 'Root location'
                     if len(categories) > 0:
                         shotsToCreate.append([False, 'update', item._key, parentName, categories, False])
                     else:
@@ -485,14 +491,14 @@ class aqSync(QDialog, AquariumSync_ui.Ui_dlg_aqSync):
                     item = None
                     if self.getItem(data[2]): 
                         item = self.getItem(data[2])['item']
-                        itemName = item.data.name
+                        itemName = self.getItem(data[2])['name']
                         prismId = self.getItem(data[2])['prismId']
                     
                     parentName = data[3]
                     parent = None
                     if self.getItem(data[3]): 
                         parent = self.getItem(data[3])['parent']
-                        parentName = parent.data.name
+                        parentName = self.getItem(data[3])['parentName']
                     
                     categories = data[4]
 
