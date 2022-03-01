@@ -237,8 +237,9 @@ class aqTimelogs(QDialog, AquariumTimelogs_ui.Ui_dlg_aqTimelogs):
 
             startDayOfMonth = 1
             endDayOfMonth = calendar.monthrange(currentYear, currentMonth)[1]
-            startOfMonth = datetime.datetime(currentYear, currentMonth, startDayOfMonth).isoformat()
-            endOfMonth = datetime.datetime(currentYear, currentMonth, endDayOfMonth).isoformat()
+            startOfMonth = datetime.datetime(currentYear, currentMonth, startDayOfMonth).isoformat(timespec='milliseconds')
+            endOfMonth = datetime.datetime.max
+            endOfMonth = endOfMonth.replace(year=currentYear, month=currentMonth, day=endDayOfMonth).isoformat(timespec='milliseconds')
             query = '# 0,0 (item.type == "Job" AND item.data.performedBy == "{userKey}" AND item.data.performedAt > "{startOfMonth}" AND item.data.performedAt <= "{endOfMonth}") SET $set SORT item.data.performedAt DESC VIEW $view'.format(
                 userKey=self.origin.aqUser._key,
                 startOfMonth=startOfMonth,
@@ -323,7 +324,8 @@ class aqTimelogs(QDialog, AquariumTimelogs_ui.Ui_dlg_aqTimelogs):
         minutes = self.sb_minute.value()
         if days > 0 or hours > 0 or minutes > 0:
             for date in self.selectedDates:
-                performedAt = datetime.datetime(date.year(), date.month(), date.day(), 0, 0, 0, 0)
+                performedAt = datetime.datetime.now()
+                performedAt = performedAt.replace(year=date.year(), month=date.month(), day=date.day())
                 data = {
                     'name': 'Job for {name}'.format(
                         name=self.cb_projects.currentText()
@@ -335,7 +337,7 @@ class aqTimelogs(QDialog, AquariumTimelogs_ui.Ui_dlg_aqTimelogs):
                         minutes = '{minutes}M'.format(minutes=minutes) if minutes > 0 else ''
                     ),
                     'performedBy': self.origin.aqUser._key,
-                    'performedAt': '{isoDate}.000Z'.format(isoDate = performedAt.isoformat())
+                    'performedAt': '{isoDate}Z'.format(isoDate = performedAt.isoformat(timespec='milliseconds'))
                 }
 
                 # local_tz = get_localzone() 
