@@ -281,11 +281,11 @@ class Prism_Aquarium_Functions(object):
         if prjman:
             prjmanMenu = QMenu("Aquarium Studio", origin)
 
-            actprjman = QAction("Open Aquarium Studio", origin)
-            actprjman.triggered.connect(self.openprjman)
-            prjmanMenu.addAction(actprjman)
+            # actprjman = QAction("Open Aquarium Studio", origin)
+            # actprjman.triggered.connect(self.openprjman)
+            # prjmanMenu.addAction(actprjman)
 
-            prjmanMenu.addSeparator()
+            # prjmanMenu.addSeparator()
             
             actSSL = QAction("Sync Aquarium > Prism", origin)
             actSSL.triggered.connect(lambda: self.aqSync(origin, 'prism'))
