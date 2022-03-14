@@ -84,4 +84,5 @@ You can contact our team at [support@fatfi.sh](mailto:support@fatfi.sh).
 
 ## Licence
 
-🚧
+This project uses the following license: GPL-3.0-only. See the license file to read it.
+
