@@ -115,28 +115,25 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
             )
         if (projectKey):
             try:
-                if (self.aqProject and self.aqProject._key == projectKey):
-                    return self.aqProject
-                else:
-                    aqProject = self.aq.item(projectKey).get()
-                    aqProject.prism = dict(
-                        properties=None,
-                        assetsLocation=None,
-                        shotsLocation=None,
-                        timelogsLocation=None
-                    )
+                aqProject = self.aq.item(projectKey).get()
+                aqProject.prism = dict(
+                    properties=None,
+                    assetsLocation=None,
+                    shotsLocation=None,
+                    timelogsLocation=None
+                )
 
-                    queryProperties = '# -($Child)> 0,1 $Properties AND item.data.prism != null VIEW item.data.prism'
-                    prismProperties = aqProject.traverse(meshql=queryProperties)
-                    if (prismProperties and len(prismProperties) > 0): aqProject.prism['properties'] = prismProperties[0]
-                    
-                    queryLocations = '# -()> * AND edge.type IN ["PrismAssetsLocation", "PrismShotsLocation", "PrismTimelogsLocation"]'
-                    locations = aqProject.traverse(meshql=queryLocations)
-                    for l in locations:
-                        location = self.aq.element(l)
-                        if location.edge.type == 'PrismAssetsLocation': aqProject.prism['assetsLocation'] = location.item._key
-                        elif location.edge.type == 'PrismShotsLocation': aqProject.prism['shotsLocation'] = location.item._key
-                        elif location.edge.type == 'PrismTimelogsLocation': aqProject.prism['timelogsLocation'] = location.item._key
+                queryProperties = '# -($Child)> 0,1 $Properties AND item.data.prism != null VIEW item.data.prism'
+                prismProperties = aqProject.traverse(meshql=queryProperties)
+                if (prismProperties and len(prismProperties) > 0): aqProject.prism['properties'] = prismProperties[0]
+                
+                queryLocations = '# -()> * AND edge.type IN ["PrismAssetsLocation", "PrismShotsLocation", "PrismTimelogsLocation"]'
+                locations = aqProject.traverse(meshql=queryLocations)
+                for l in locations:
+                    location = self.aq.element(l)
+                    if location.edge.type == 'PrismAssetsLocation': aqProject.prism['assetsLocation'] = location.item._key
+                    elif location.edge.type == 'PrismShotsLocation': aqProject.prism['shotsLocation'] = location.item._key
+                    elif location.edge.type == 'PrismTimelogsLocation': aqProject.prism['timelogsLocation'] = location.item._key
 
             except Exception as e:
                 logger.warning("Could not access to project:\n\n%s" % e)
