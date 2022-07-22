@@ -2,6 +2,7 @@
 
 import os
 import sys
+import glob
 import traceback
 import subprocess
 import datetime
@@ -385,11 +386,22 @@ class UploadWorker(QObject):
 
             isSequenceInput = False
             if not isVideoInput:
+                padding = inputpath[-8:-(self.origin.core.framePadding)]
+                isInteger = False
+
                 try:
-                    x = int(inputpath[-8:-4])
-                    isSequenceInput = True
+                    isInteger = type(int(padding)) is int
                 except:
                     pass
+
+                if isInteger:
+                    regex = '{filename}*{ext}'.format(
+                        filename=os.path.splitext(inputpath)[0][:-(self.origin.core.framePadding)],
+                        ext=os.path.splitext(inputpath)[1]
+                    )
+                    files = glob.glob(regex)
+                    if len(files) > 1:
+                        isSequenceInput = True
 
             if isImageInput and not isSequenceInput:
                 fileToUpload = inputpath
