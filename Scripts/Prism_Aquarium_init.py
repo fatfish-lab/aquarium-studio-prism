@@ -188,7 +188,7 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
             usePrismNamingConvention = project.prism['properties']['usePrismNamingConvention']
 
         startpoint = self.getAssetsLocation(project = project)
-        query = "# -($Child, 3)> $Asset AND path.edges[*].data.hidden != true VIEW $view"
+        query = "# -($Child, 3)> 0,500 $Asset AND path.edges[*].data.hidden != true VIEW $view"
         aliases = {
             "view": {
                 "item": "item",
@@ -228,7 +228,7 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
             usePrismNamingConvention = project.prism['properties']['usePrismNamingConvention']
 
         startpoint = self.getShotsLocation(project = project)
-        query = "# -($Child, 3)> $Shot AND path.edges[*].data.hidden != true VIEW $view"
+        query = "# -($Child, 3)> 0,500 $Shot AND path.edges[*].data.hidden != true VIEW $view"
         aliases = {
             "view": {
                 "item": "item",
