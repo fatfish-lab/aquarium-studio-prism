@@ -32,11 +32,18 @@ class Project(Item):
         """
         Gets all the shots of the project
 
-        :returns:   List of Shot class and Edge class
-        :rtype:     List of dictionary {item: :class:`~aquarium.items.shot.Shot`, edge: :class:`~aquarium.edge.Edge`}
+        :returns:   List of Shot class, Edge class and Tasks
+        :rtype:     List of dictionary {item: :class:`~aquarium.items.shot.Shot`, edge: :class:`~aquarium.edge.Edge`, tasks: [:class:`~aquarium.items.task.Task`]}
         """
-        query = "# -($Child, 5)> 0, 0 $Shot"
-        result = self.traverse(meshql=query)
+        query = "# -($Child, 5)> 0, 0 $Shot VIEW $view"
+        aliases = {
+            "view": {
+                "item": 'item',
+                "edge": 'edge',
+                "tasks": '# -($Child)> $Task VIEW item'
+            }
+        }
+        result = self.traverse(meshql=query, aliases=aliases)
         result = [self.parent.element(data) for data in result]
         return result
 
@@ -44,10 +51,17 @@ class Project(Item):
         """
         Gets all the assets of the project
 
-        :returns:   List of Asset class and Edge class
-        :rtype:     List of dictionary {item: :class:`~aquarium.items.asset.Asset`, edge: :class:`~aquarium.edge.Edge`}
+        :returns:   List of Asset class, Edge class and Tasks
+        :rtype:     List of dictionary {item: :class:`~aquarium.items.asset.Asset`, edge: :class:`~aquarium.edge.Edge`, tasks: [:class:`~aquarium.items.task.Task`]}
         """
-        query = "# -($Child, 5)> 0, 0 $Asset"
-        result = self.traverse(meshql=query)
+        query = "# -($Child, 5)> 0, 0 $Asset VIEW $view"
+        aliases = {
+            "view": {
+                "item": 'item',
+                "edge": 'edge',
+                "tasks": '# -($Child)> $Task VIEW item'
+            }
+        }
+        result = self.traverse(meshql=query, aliases=aliases)
         result = [self.parent.element(data) for data in result]
         return result

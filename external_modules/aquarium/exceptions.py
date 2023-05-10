@@ -1,8 +1,17 @@
 class Error(Exception):
     def __init__(self, response):
-        url=response.url
-        error=response.json().get('error')
-        super(Error, self).__init__('{0} - url:{1}'.format(error, url))
+        if (type(response) is str):
+            super(Error, self).__init__(response)
+        else:
+            url=response.url
+            status_code=response.status_code
+            if status_code == 405:
+                error='Method Not Allowed. Use "{0}" instead'.format(
+                    response.headers['allowed']
+                )
+            else:
+                error=response.json().get('error')
+            super(Error, self).__init__('{0} - url:{1}'.format(error, url))
 
 #400
 class RequestError(Error):
@@ -16,6 +25,9 @@ class AutorisationError(Error):
 #404
 class PathNotFoundError(Error):
     pass
+#405
+class MethodNotAllowed(Error):
+    pass
 #409
 class ConflictError(Error):
     pass
@@ -24,4 +36,7 @@ class UploadExceedLimit(Error):
     pass
 #500
 class InternalError(Error):
+    pass
+
+class Deprecated(Error):
     pass

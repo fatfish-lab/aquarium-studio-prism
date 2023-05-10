@@ -1,59 +1,116 @@
 # -*- coding: utf-8 -*-
-import pprint
+import sys
+import datetime
+import re
+import pytz
 import logging
-logger=logging.getLogger(__name__)
-from .exceptions import RequestError, AuthentificationError,\
-                        AutorisationError, PathNotFoundError, \
-                        ConflictError, UploadExceedLimit, InternalError
+logger = logging.getLogger(__name__)
 
-def pretty_print_format(data={}, indent=8, width=80, depth=10):
-    dict_string=pprint.pformat(data, indent=indent, width=width, depth=depth)
-    return dict_string
 
-def to_string_url(value=None):
+class Utils():
     """
-    Convert value to string url convention
-
-    :param      value:  The value to convert
-    :type       value:  number
-
-    :returns:   The value converted
-    :rtype:     string
+    This class is a utility class.
     """
-    return str(value).lower()
 
-def evaluate(response=None):
-    """
-    Evaluate request response
+    @staticmethod
+    def duration(days = 0, hours = 0, minutes = 0):
+        """
+        Generate an ISO 8601 duration string.
 
-    :param      response:        The response
-    :type       response:        Response object
+        :param      days:     The number of days to add
+        :type       days:     number
+        :param      hours:    The number of hours to add
+        :type       hours:    number
+        :param      minutes:  The number of minutes to add
+        :type       minutes:  number
 
-    :returns:   True if succeed
-    :rtype:     boolean
+        :returns:   ISO 8601 duration string
+        :rtype:     string
+        """
+        return 'P{days}{time}{hours}{minutes}'.format(
+            days='{days}D'.format(days=days) if days > 0 else '',
+            time='T' if hours > 0 or minutes > 0 else '',
+            hours='{hours}H'.format(hours=hours) if hours > 0 else '',
+            minutes='{minutes}M'.format(minutes=minutes) if minutes > 0 else '')
 
-    :raises     RuntimeError:  "error" value from response
-    """
-    status_code=response.status_code
-    url=response.url
-    logger.debug('Evaluate request response : status_code : %s / url : %s', status_code, url)
-    if status_code == 200:
-        return True
-    elif status_code==400:
-        raise RequestError(response)
-    elif status_code==401:
-        raise AuthentificationError(response)
-    elif status_code==403:
-        raise AutorisationError(response)
-    elif status_code==404:
-        raise PathNotFoundError(response)
-    elif status_code==409:
-        raise ConflictError(response)
-    elif status_code==413:
-        raise UploadExceedLimit(response)
-    elif status_code==500:
-        raise InternalError(response)
-    else:
-        raise RuntimeError('code {0} : {1} url:{2}'.format(
-            status_code, response, url))
+    @staticmethod
+    def humanize_duration(duration):
+        """
+        Humanize an ISO duration.
 
+        :param      duration:     The ISO duration string
+        :type       duration:     string
+
+        :returns:   Humanized duration string
+        :rtype:     string
+        """
+        humanized = ''
+        regex = r'^P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)W)?(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:.\d+)?)S)?$'
+        parsedDuration = re.findall(regex, duration)
+        if (len(parsedDuration) > 0):
+            parsedDuration = parsedDuration[0]
+            years = parsedDuration[0] or 0
+            months = parsedDuration[1] or 0
+            weeks = parsedDuration[2] or 0
+            days = parsedDuration[3] or 0
+            hours = parsedDuration[4] or 0
+            minutes = parsedDuration[5] or 0
+            seconds = parsedDuration[6] or 0.0
+
+            humanized = '{years}{months}{weeks}{days}{hours}{minutes}{seconds}'.format(
+                years='{years} year '.format(years=years) if years > 0 else '',
+                months='{months} month '.format(months=months) if months > 0 else '',
+                weeks='{weeks} week '.format(weeks=weeks) if weeks > 0 else '',
+                days='{days}d '.format(days=days) if days > 0 else '',
+                hours='{hours}h '.format(hours=hours) if hours > 0 else '',
+                minutes='{minutes}m '.format(minutes=minutes) if minutes > 0 else '',
+                seconds='{seconds}s '.format(seconds=seconds) if seconds > 0 else '',
+            )
+
+        return humanized
+
+    @staticmethod
+    def date():
+        """
+        Alias of :func:`~aquarium.aquarium.Utils.now`.
+
+        :returns:   ISO 8601 date string
+        :rtype:     string
+        """
+
+        return Utils.now()
+
+    @staticmethod
+    def now():
+        """
+        Get current date/time as an ISO 8601 date string.
+
+        :returns:   ISO 8601 date string
+        :rtype:     string
+        """
+
+        date = datetime.datetime.now(pytz.UTC)
+
+        if sys.version_info[0] > 2:
+            return date.isoformat(timespec='milliseconds')
+        else:
+            return date.isoformat()
+
+    @staticmethod
+    def format_date(date, format='%Y/%m/%d'):
+        """
+        Format the date.
+
+        :param      date:   The ISO date string
+        :type       date:   string
+        :param      format: The desired date format. Default is '%Y/%m/%d'
+        :type       format: string, optional
+
+        .. tip::
+            Check the [Python documentation](https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes) to customize the format
+
+        :returns:   Formated date string
+        :rtype:     string
+        """
+
+        return datetime.datetime.strptime(date, "%Y-%m-%dT%H:%M:%S.%f%z").strftime(format)

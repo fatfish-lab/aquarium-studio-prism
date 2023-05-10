@@ -15,14 +15,34 @@ class Task(Item):
         :param      user_key:  The user key
         :type       user_key:  string
 
-        :returns:   Edge object
+        :returns:   Created assigned edge object
         :rtype:     :class:`~aquarium.edge.Edge`
         """
         result = self.parent.edge.create(
-            type='Assigned', from_key=self._key, to_key=user_key)
+            type='Assigned', from_key=str(self._key), to_key=str(user_key))
         return result
 
-    def add_timelog(self, user_key='', comment='', date='', duration=''):
+    def unassign_from(self, user_key=''):
+        """
+        Unassign the task from user
+
+        :param      user_key:  The user key
+        :type       user_key:  string
+
+        :returns:   Deleted assigned edge object
+        :rtype:     :class:`~aquarium.edge.Edge`
+        """
+        result = self.traverse(
+            meshql='# -($Assigned)> 0,1 $User AND item._key == "{user_key}" VIEW edge'.format(user_key=user_key))
+
+        if len(result) > 0:
+            assigned_edge = self.parent.cast(result[0])
+            assigned_edge.delete()
+            return assigned_edge
+        else:
+            return None
+
+    def add_timelog(self, user_key, comment='', date='', duration=''):
         """
         Add a timelog to the task
 
@@ -30,14 +50,17 @@ class Task(Item):
         :type       user_key:  string
         :param      comment:   The comment
         :type       comment:   string
-        :param      date:      The date
+        :param      date:      The date of the timelog. Use :func:`~aquarium.utils.Utils.date` to generate an ISO date string.
         :type       date:      string ISO 8601 (date)
-        :param      duration:  The duration
+        :param      duration:  The duration of the timelog. Use :func:`~aquarium.utils.Utils.duration` to generate an ISO duration string.
         :type       duration:  string ISO 8601 (duration)
 
         :returns:   Dictionary of Item object and Edge object
         :rtype:     dictionary {item: :class:`~aquarium.item.Item`, edge: :class:`~aquarium.edge.Edge`}
         """
+
+        if user_key == None:
+            user_key = self.parent.me()._key
 
         data = dict(
             duration=duration,
@@ -60,9 +83,10 @@ class Task(Item):
         statuses_dct = dict()
 
         for status in statuses:
-            name = status.get('status')
-            if name not in statuses_dct:
-                statuses_dct[name] = status
+            if status:
+                name = status.get('status')
+                if name not in statuses_dct:
+                    statuses_dct[name] = status
         result = statuses_dct or DEFAULT_STATUSES
         return result
 

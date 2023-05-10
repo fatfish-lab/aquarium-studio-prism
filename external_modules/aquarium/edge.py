@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import json
-from .utils import to_string_url
+from .tools import to_string_url
 from .entity import Entity
 
 

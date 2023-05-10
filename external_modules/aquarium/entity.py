@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from . import JSON_CONTENT_TYPE
-from .utils import evaluate, pretty_print_format
+from .tools import evaluate, pretty_print_format
 from dotmap import DotMap
 import requests
 import logging
@@ -47,7 +47,7 @@ class Entity(object):
 
         if data:
             # As number or string
-            if isinstance(data, str) or isinstance(data, int):
+            if isinstance(data, str) or isinstance(data, int) or isinstance(data, type(u'')):
                 inst._key=str(data)
 
             # As dict

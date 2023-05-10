@@ -11,7 +11,7 @@ class User(Item):
     This class describes an User object child of Item class.
     """
 
-    def connect(self, email='', password=''):
+    def signin(self, email='', password=''):
         """
         Sign in a user with it's email and password
 
@@ -20,8 +20,8 @@ class User(Item):
         :param      password:  The password of the user
         :type       password:  string
 
-        :returns: Dictionary of token and User object
-        :rtype: dictionary
+        :returns: Dictionary User object
+        :rtype: Dict {user: :class:`~aquarium.items.user.User`}
         """
         logging.debug('Connect user %s', email)
         # Authenticate and retrieve the access token
@@ -36,14 +36,37 @@ class User(Item):
 
         return result
 
+    def connect(self, email='', password=''):
+        """
+        Alias of :func:`~aquarium.items.user.User.signin`
+        """
+        return self.signin(email, password)
+
+    def signout(self):
+        """
+        Sign out the current user by clearing the stored authentication token
+
+        .. note::
+            After a :func:`~aquarium.items.user.User.signout`, you need to use a :func:`~aquarium.items.user.User.signin` before sending authenticated requests
+
+        :returns: None
+        """
+        self.do_request(
+            'POST', 'signout', decoding=False)
+
+       # Remove authentification information
+        self.parent.token = None
+
+        return None
+
     def get_profile(self):
         """
         Get the current profil.
 
-        :returns:   User and Usergroup object
-        :rtype:     Dict {user: :class:`~aquarium.items.user.User`, usergroups: [:class:`~aquarium.items.usergroup.Usergroup`]}
+        :returns:   User, Usergroups and Organisations object
+        :rtype:     Dict {user: :class:`~aquarium.items.user.User`, usergroups: [:class:`~aquarium.items.usergroup.Usergroup`], organisations: [:class:`~aquarium.items.organisation.Organisation`]}
         """
-        result = self.do_request('GET', 'users/me', headers=URL_CONTENT_TYPE)
+        result = self.do_request('GET', 'users/me')
         result = self.parent.element(result)
         return result
 

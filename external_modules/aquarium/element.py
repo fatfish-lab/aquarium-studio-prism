@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from .utils import pretty_print_format
+from .tools import pretty_print_format
 from inspect import ismethod
 
 class Element(object):

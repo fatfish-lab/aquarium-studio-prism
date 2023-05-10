@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 from . import URL_CONTENT_TYPE
 import json
-from .utils import to_string_url
+import re
+import os
+from .tools import to_string_url
 from .entity import Entity
+from .exceptions import Deprecated
 import logging
 logger = logging.getLogger(__name__)
 
@@ -12,7 +15,7 @@ class Item(Entity):
     This class describes an Item object child of Aquarium class.
     """
 
-    def create(self, type='', data={}):
+    def create(self, type='', data={}, path=None):
         """
         Create an item
 
@@ -25,8 +28,10 @@ class Item(Entity):
 
         :param      type:  The newitem type
         :type       type:  string
-        :param      data:  The newitem data, optional
-        :type       data:  dictionary
+        :param      data:  The newitem data
+        :type       data:  dictionary, optional
+        :param      path:  File path you want to upload on the appended item
+        :type       path:  string, optional
 
         :returns:   Item object
         :rtype:     :class:`~aquarium.item.Item` or subclass : :class:`~aquarium.items.asset.Asset` | :class:`~aquarium.items.project.Project` | :class:`~aquarium.items.shot.Shot` | :class:`~aquarium.items.task.Task` | :class:`~aquarium.items.template.Template` | :class:`~aquarium.items.user.User` | :class:`~aquarium.items.usergroup.Usergroup`
@@ -35,9 +40,15 @@ class Item(Entity):
         payload = dict(type=type, data=data)
         result = self.do_request('POST', 'items', data=json.dumps(payload))
         result = self.parent.cast(result)
+
+        if path != None:
+            upload = result.upload_file(path=path)
+            if upload != None:
+                for key in upload.data:
+                    result.data[key] = upload.data[key]
         return result
 
-    def append(self, type='', data={}, edge_type='Child', edge_data={}, apply_template=None, template_key=None):
+    def append(self, type='', data={}, edge_type='Child', edge_data={}, apply_template=None, template_key=None, path=None):
         """
         Create and append a new item to the current one
 
@@ -53,9 +64,11 @@ class Item(Entity):
         :type       apply_template:  boolean, optional
         :param      template_key:    The template key to apply. If no template key, `automatic context's template <https://docs.fatfish.app/#/userguide/items?id=templates>`_ will be used.
         :type       template_key:    string, optional
+        :param      path:            File path you want to upload on the appended item
+        :type       path:            string, optional
 
         :returns:   Dictionary composed by an item and its edge.
-        :rtype:     dict {item: :class:`~aquarium.item.Item` or subclass : :class:`~aquarium.items.asset.Asset` | :class:`~aquarium.items.project.Project` | :class:`~aquarium.items.shot.Shot` | :class:`~aquarium.items.task.Task` | :class:`~aquarium.items.template.Template` | :class:`~aquarium.items.user.User` | :class:`~aquarium.items.usergroup.Usergroup`, edge: :class:`~aquarium.edge.Edge}`
+        :rtype:     dict {item: :class:`~aquarium.item.Item` or subclass : :class:`~aquarium.items.asset.Asset` | :class:`~aquarium.items.project.Project` | :class:`~aquarium.items.shot.Shot` | :class:`~aquarium.items.task.Task` | :class:`~aquarium.items.template.Template` | :class:`~aquarium.items.user.User` | :class:`~aquarium.items.usergroup.Usergroup` | :class:`~aquarium.items.organisation.Organisation`, edge: :class:`~aquarium.edge.Edge}`
         """
 
         payload = {
@@ -78,6 +91,13 @@ class Item(Entity):
         result = self.do_request(
             'POST', 'items/'+self._key+'/append', data=json.dumps(payload))
         result = self.parent.element(result)
+
+        if path != None:
+            upload = result.item.upload_file(path=path)
+            if upload != None:
+                for key in upload.data:
+                    result.item.data[key] = upload.data[key]
+
         return result
 
     def traverse(self, meshql='', aliases={}):
@@ -97,6 +117,25 @@ class Item(Entity):
         data = dict(query=meshql, aliases=aliases)
         result = self.do_request(
             'POST', 'items/'+self._key+'/traverse', data=json.dumps(data))
+        return result
+
+    def traverse_trashed(self, meshql='', aliases={}):
+        """
+        Execute a traverse from the current item on trashed_items
+
+        :param      meshql:        The meshql string
+        :type       meshql:        string
+        :param      aliases:       The aliases used in the meshql query
+        :type       aliases:       dictionary, optional
+
+        :returns:   List of item and/or edge or VIEW used in the meshql query
+        :rtype:     list
+        """
+        logger.debug('Send traverse trashed_items : meshql : %s / aliases : %r',
+                     meshql, aliases)
+        data = dict(query=meshql, aliases=aliases)
+        result = self.do_request(
+            'POST', 'trashed_items/'+self._key+'/traverse', data=json.dumps(data))
         return result
 
     def replace_data(self, data={}):
@@ -191,39 +230,52 @@ class Item(Entity):
         result = self.parent.cast(result)
         return result
 
-    def reapply_template(self, template_key=''):
+    def reapply_template(self, template_key=None):
         """
-        Re-apply the template previously used
+        Re-apply the specific template
+
+        :param      template_key:   The key of the template to re-apply
+        :type       template_key:   string
 
         :returns:   Item object
         :rtype:     :class:`~aquarium.item.Item` or subclass : :class:`~aquarium.items.asset.Asset` | :class:`~aquarium.items.project.Project` | :class:`~aquarium.items.shot.Shot` | :class:`~aquarium.items.task.Task` | :class:`~aquarium.items.template.Template` | :class:`~aquarium.items.user.User` | :class:`~aquarium.items.usergroup.Usergroup`
         """
-        logger.debug('Re-apply existing template on item %s', self._key)
+        if template_key == None:
+            raise Deprecated("You can't use this function without providing the template_key you want to use.")
+
+        logger.debug('Re-apply template %s on item %s', template_key, self._key)
         result = self.do_request(
-            'POST', 'items/' + self._key + '/template/reapply')
+            'POST', 'templates/{templateKey}/sync/{itemKey}'.format(
+                templateKey=template_key,
+                itemKey=self._key
+            ))
         result = self.parent.cast(result)
         return result
 
-    def get(self, populate=False, versions=False):
+    def get(self, populate=False, history=False):
         """
         Get item object with its _key
 
         :param      populate:  Populate `item.createdBy` and `item.updatedBy` with User object
         :type       populate:  boolean
-        :param      versions:  Get previous item's data versions
-        :type       versions:  boolean, optional
+        :param      history:  Get previous item's data history
+        :type       history:  boolean, optional
 
         :returns:   Item object
         :rtype:     :class:`~aquarium.item.Item` or subclass : :class:`~aquarium.items.asset.Asset` | :class:`~aquarium.items.project.Project` | :class:`~aquarium.items.shot.Shot` | :class:`~aquarium.items.task.Task` | :class:`~aquarium.items.template.Template` | :class:`~aquarium.items.user.User` | :class:`~aquarium.items.usergroup.Usergroup`
         """
-        result = self.do_request('GET', 'items/{0}/?populate={1}&versions={2}'.format(
-            self._key, int(populate), int(versions)), headers=URL_CONTENT_TYPE)
+        params = dict()
+        if (populate == True): params['populate'] = 'true'
+        if (history == True): params['history'] = 'true'
+
+        print(params)
+        result = self.do_request('GET', 'items/{0}/'.format(self._key), params=params)
         result = self.parent.cast(result)
         return result
 
-    def get_versions(self, populate=False):
+    def get_history(self, populate=False):
         """
-        Get the previous item's data versions
+        Get the previous item's data history
 
         :param      populate:  Populate `item.createdBy` and `item.updatedBy` with User object
         :type       populate:  boolean, optional
@@ -232,9 +284,15 @@ class Item(Entity):
         :rtype:     list
         """
         result = self.do_request(
-            'GET', 'items/{0}/versions?populate={1}'.format(self._key, to_string_url(populate)))
+            'GET', 'items/{0}/history?populate={1}'.format(self._key, to_string_url(populate)))
         result = [self.parent.cast(data) for data in result]
         return result
+
+    def get_versions(self, populate=False):
+        """
+        Alias of :func:`~aquarium.items.item.get_history`
+        """
+        return self.get_history(self, populate)
 
     def get_shortest_path(self, key=''):
         """
@@ -268,45 +326,179 @@ class Item(Entity):
         result = [self.parent.element(data) for data in result]
         return result
 
-    def get_parents(self):
+    def create_permission(self, participant_key, permissions, propagate = True):
+        """
+        Create a new permission on an item. It's like sharing an item to an existing user, usergroup or organisation.
+
+        :param      participant_key:    The _key of the user, usergroup or organisation to invite.
+        :type       participant_key:    string
+        :param      permissions:        The permissions you want to grant to the participant.
+        :type       permissions:        string
+        :param      propagate:          Propagate or not this new permission.
+        :type       propagate:          boolean, optional
+
+        .. tip::
+            Available permissions :
+                * Can read is `r`
+                * Can write is `w`
+                * Can add content is `a`
+                * Can trash content is `t`
+                * Can link (assign, favorite..) is `l`
+                * Can unlink is `u`
+                * Can share is `s`
+                * Can delete is `d`
+                * Can change permissions is `g`
+
+            Examples:
+                * Read only is `permissions='r'`
+                * Write is `permissions='rwa'`
+                * Write & connect is `permissions='rwalu'`
+                * Write, connect & trash is `permissions='rwatlu'`
+                * Write, connect, trash & share is `permissions='rwatslu'`
+                * Admin is `permissions='rwsadtlug'`
+
+            The special permission `*`, is to avoid permissions inheritage when append content.
+
+
+        :returns:   A dict with the {user: participant, edge: the created permission edge}
+        :rtype:     dict
+        """
+        data = {
+            'userKey': participant_key,
+            'data': {
+                'permissions': permissions
+            },
+            'propagate': propagate
+        }
+        result = self.do_request(
+            'POST', 'items/{0}/permissions'.format(self._key), data=json.dumps(data))
+        result['user'] = self.parent.cast(result['user'])
+        return result
+
+    def remove_permission(self, participant_key):
+        """
+        Remove an existing permission from an item. It's like unsharing an item to an existing user, usergroup or organisation.
+
+        :param      participant_key:    The _key of the user, usergroup or organisation to invite.
+        :type       participant_key:    string
+
+        :returns:   A dict with the {user: participant, edge: the removed permission edge}
+        :rtype:     dict
+        """
+        data = {
+            'userKey': participant_key
+        }
+        result = self.do_request(
+            'DELETE', 'items/{0}/permissions'.format(self._key), data=json.dumps(data))
+        result['user'] = self.parent.cast(result['user'])
+        return result
+
+    def update_permission(self, participant_key, permissions, propagate=True):
+        """
+        Update an existing permission on an item.
+
+        :param      participant_key:    The _key of the user, usergroup or organisation to invite.
+        :type       participant_key:    string
+        :param      permissions:        The permissions you want to grant to the participant.
+        :type       permissions:        string
+        :param      propagate:          Propagate or not this new permission.
+        :type       propagate:          boolean, optional
+
+        .. tip::
+            Available permissions are the same than :func:`~aquarium.item.Item.create_permission`
+
+        :returns:   A dict with the {user: participant, edge: the updated permission edge}
+        :rtype:     dict
+        """
+        data = {
+            'userKey': participant_key,
+            'data': {
+                'permissions': permissions
+            },
+            'propagate': propagate
+
+        }
+        result = self.do_request(
+            'PATCH', 'items/{0}/permissions'.format(self._key), data=json.dumps(data))
+        result['user'] = self.parent.cast(result['user'])
+        return result
+
+    def get_parents(self, limit = 50, offset = 0):
         """
         Gets the parents of the item
+
+        :param      limit:   Maximum limit of returned items
+        :type       limit:   integer, optional
+        :param      offset:  Number of skipped items. Used for pagination
+        :type       offset:  integer, optional
 
         :returns:   List of item and edge object
         :rtype:     list of {item: :class:`~aquarium.item.Item`, edge: :class:`~aquarium.edge.Edge`}
         """
-        query = "# <($Child)- *"
+        query = "# <($Child)- {offset},{limit} *".format(
+            offset=offset,
+            limit=limit
+        )
+
         result = self.traverse(meshql=query)
         result = [self.parent.element(data) for data in result]
         return result
 
-    def get_children(self, show_hidden=False):
+    def get_children(self, show_hidden=False, types=None, names=None, limit=50, offset=0):
         """
         Gets the children of the item
 
         :param      show_hidden:  Show hidden items
         :type       show_hidden:  boolean, optional
+        :param      types:  One string or list of string items type you want to filter
+        :type       types:  string or list, optional
+        :param      names:  One string or list of string items name you want to filter
+        :type       names:  string or list, optional
+        :param      limit:   Maximum limit of returned items
+        :type       limit:   integer, optional
+        :param      offset:  Number of skipped items. Used for pagination
+        :type       offset:  integer, optional
 
         :returns:   List of item and edge object
         :rtype:     list of {item: :class:`~aquarium.item.Item`, edge: :class:`~aquarium.edge.Edge`}
         """
-        query = "# -($Child)> *"
+        query = ["# -($Child)> {offset}, {limit}".format(
+            offset=offset,
+            limit=limit
+        )]
+        aliases = dict()
+
+        if types == None:
+            query.append('*')
+        else:
+            query.append('item.type IN @types')
+            if not isinstance(types, list): types=[types]
+            aliases['types'] = types
+
+        if names != None:
+            query.append('AND item.data.name IN @names')
+            if not isinstance(names, list): names=[names]
+            aliases['names'] = names
+
         if not show_hidden:
-            query += ' AND edge.data.isHidden != true'
-        result = self.traverse(meshql=query)
+            query.append('AND edge.data.isHidden != true')
+
+        result = self.traverse(meshql=' '.join(query), aliases=aliases)
         result = [self.parent.element(data) for data in result]
         return result
 
-    def get_trash(self):
+    def get_trash(self, meshql='# -($Child)> *'):
         """
         Gets the trashed items
+
+        :param      meshql:  The meshql string. Default is "# -($Child)> *"
+        :type       meshql:  string, optional
 
         :returns:   List of trashed item and edge object
         :rtype:     list of {item: :class:`~aquarium.item.Item`, edge: :class:`~aquarium.edge.Edge`}
         """
-        query = '# -($Trash)> *'
-        result = self.traverse(meshql=query)
-        result = [self.parent.cast(data['item']) for data in result]
+        result = self.traverse_trashed(meshql)
+        result = [self.parent.element(data) for data in result]
         return result
 
     def move(self, old_parent_key=None, new_parent_key=None):
@@ -333,37 +525,33 @@ class Item(Entity):
         result = self.parent.element(result)
         return result
 
-    def trash(self, parent_key=''):
+    def trash(self):
         """
-        Move item from parent item to trash
-
-        :param      parent_key:  The key of the parent
-        :type       parent_key:  string
+        Move item to the trash
 
         :returns:   Trashed item
         :rtype:     dictionary
         """
-        logger.debug('Trash item %s from parent %s', self._key, parent_key)
-        data = dict(itemKey=self._key)
+        logger.debug('Trash item %s', self._key)
         result = self.do_request(
-            'POST', 'items/'+parent_key+'/trash', data=json.dumps(data))
+            'POST', 'items/{itemKey}/trash'.format(
+                itemKey=self._key
+            ))
         result = self.parent.element(result)
         return result
 
-    def restore(self, parent_key=''):
+    def restore(self):
         """
-        Restore an item from trash to parent item
+        Restore an item from trash
 
-        :param      parent_key:  The key of the parent
-        :type       parent_key:  string
-
-        :returns:   Restored edge
-        :rtype:     :class:`~aquarium.edge.Edge`
+        :returns:   Restored item
+        :rtype:     :class:`~aquarium.item.Item`
         """
-        logger.debug('Restore item %s from parent %s', self._key, parent_key)
-        data = dict(itemKey=self._key)
+        logger.debug('Restore item %s', self._key)
         result = self.do_request(
-            'POST', 'items/'+parent_key+'/restore', data=json.dumps(data))
+            'POST', 'trashed_items/{itemKey}/restore'.format(
+                itemKey=self._key
+            ))
         result = self.parent.cast(result)
         return result
 
@@ -386,6 +574,11 @@ class Item(Entity):
         """
         Upload a file on the item
 
+        .. warning::
+            This function will replace the data on the item.
+            It's here to replace the existing file's data by creating a new history entry.
+            We advice you to use :func:`~aquarium.item.Item.append` if you want to upload the file as a new item.
+
         :param      path:  The path of the file to upload
         :type       path:  string
         :param      data:  The data you want to upload with the file, optional
@@ -393,8 +586,8 @@ class Item(Entity):
         :param      message:  The message associated with the upload, optional
         :type       message:  string
 
-        :returns:   item object from API
-        :rtype:     dictionary
+        :returns:   Item object
+        :rtype:     :class:`~aquarium.item.Item`
         """
         logger.debug('Upload file %s on item %s with data %s', path, self._key, data)
 
@@ -406,23 +599,39 @@ class Item(Entity):
         result = self.do_request(
             'POST', 'items/'+self._key+'/upload', headers={'Content-Type': None}, files=files)
         files['file'].close()
+        result = self.parent.cast(result)
         return result
 
-    def download_file(self, path=''):
+    def download_file(self, path, versionKey=None):
         """
         Download the item's file to the path
 
-        :param      path:  The path used to store the download
+        :param      path:  The path used to store the download. If directory is provided, the file name from original file is used
         :type       path:  string
+        :param      versionKey:  The versionKey used to download the file
+        :type       versionKey:  string, optional
         """
         logger.debug('Download from item %s to file %s', self._key, path)
+
+        url = 'items/{_key}/download'.format(_key=self._key)
+        if (versionKey != None):
+            url = '{url}?versionKey=${versionKey}'.format(versionKey=versionKey)
+
         result = self.do_request(
-            'GET', 'items/'+self._key+'/download', headers=URL_CONTENT_TYPE, decoding=False)
+            'GET', url, headers=URL_CONTENT_TYPE, decoding=False)
+
+        if (os.path.isdir(path)):
+            content_disposition = result.headers['content-disposition']
+            filename = re.findall('filename="(.+)"', content_disposition)
+            print(content_disposition)
+            if len(filename) > 0:
+                path = os.path.join(path, str(filename[0]))
+
         with open(path, 'wb') as f:
             for chunk in result:
                 f.write(chunk)
-        result = result.json()
-        return result
+
+        return path
 
     def import_json(self, content={}):
         """

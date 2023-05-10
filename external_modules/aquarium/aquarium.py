@@ -2,7 +2,7 @@
 from . import JSON_CONTENT_TYPE
 from .item import Item
 from .edge import Edge
-from .utils import evaluate
+from .tools import evaluate
 from .items.user import User
 from .items.template import Template
 from .items.project import Project
@@ -10,9 +10,19 @@ from .items.task import Task
 from .items.shot import Shot
 from .items.asset import Asset
 from .items.usergroup import Usergroup
+from .items.organisation import Organisation
+from .items.playlist import Playlist
 from .element import Element
+from .utils import Utils
 
 import requests
+
+import sys
+if sys.version_info[0] > 2:
+    from urllib.parse import urljoin, urlparse
+else:
+    from urlparse import urljoin, urlparse
+
 import json
 import logging
 logger=logging.getLogger(__name__)
@@ -22,23 +32,43 @@ class Aquarium(object):
     """
     This class describes the main class of Aquarium
 
-    :param api_url: Specify the URL of the API. Don't forget to add the version you use ex: `/v1`
+    :param api_url: Specify the URL of the API.
     :type api_url: string
-    :param token: Specify the authentication token, to avoid :func:`~aquarium.aquarium.Aquarium.connect`
-    :type token: string
+    :param token: Specify the authentication token, to avoid :func:`~aquarium.aquarium.Aquarium.signin`
+    :type token: string, optional
+    :param api_version: Specify the API version you want to use (default : `v1`).
+    :type api_version: string, optional
+    :param domain: Specify the domain used for unauthenticated requests. Mainly for Aquarium Fatfish Lab dev or local Aquarium server without DNS
+    :type domain: string, optional
 
-    :ivar edge: Access to :class:`~aquarium.edge.Edge`
-    :ivar item: Access to :class:`~aquarium.item.Item`
-    :ivar asset: Access to subclass :class:`~aquarium.items.asset.Asset`
-    :ivar project: Access to subclass :class:`~aquarium.items.project.Project`
-    :ivar shot: Access to subclass :class:`~aquarium.items.shot.Shot`
-    :ivar task: Access to subclass :class:`~aquarium.items.task.Task`
-    :ivar template: Access to subclass :class:`~aquarium.items.template.Template`
-    :ivar user: Access to subclass :class:`~aquarium.items.user.User`
-    :ivar usergroup: Access to subclass :class:`~aquarium.items.usergroup.Usergroup`
+    :var token: Get the current token (populated after a first :func:`~aquarium.aquarium.Aquarium.signin`)
+    :var edge: Access to Edge class
+    :vartype edge: :class:`~aquarium.edge.Edge`
+    :var item: Access to Item class
+    :vartype item: :class:`~aquarium.item.Item`
+    :var asset: Access to Asset subclass
+    :vartype asset: :class:`~aquarium.items.asset.Asset`
+    :var playlist: Access to Playlist subclass
+    :vartype playlist: :class:`~aquarium.items.playlist.Playlist`
+    :var project: Access to Project subclass
+    :vartype project: :class:`~aquarium.items.project.Project`
+    :var shot: Access to Shot subclass
+    :vartype shot: :class:`~aquarium.items.shot.Shot`
+    :var task: Access to Task subclass
+    :vartype task: :class:`~aquarium.items.task.Task`
+    :var template: Access to Template subclass
+    :vartype template: :class:`~aquarium.items.template.Template`
+    :var user: Access to User subclass
+    :vartype user: :class:`~aquarium.items.user.User`
+    :var usergroup: Access to Usergroup subclass
+    :vartype usergroup: :class:`~aquarium.items.usergroup.Usergroup`
+    :var organisation: Access to Organisation subclass
+    :vartype organisation: :class:`~aquarium.items.organisation.Organisation`
+    :var utils: Access to Utils class
+    :vartype utils: :class:`~aquarium.utils.Utils`
     """
 
-    def __init__(self, api_url='', token=''):
+    def __init__(self, api_url='', token='', api_version='v1', domain=None):
         """
         Constructs a new instance.
         """
@@ -46,16 +76,21 @@ class Aquarium(object):
         self.session=requests.Session()
 
         self.api_url=api_url
+        self.api_version=api_version
         self.token=token
+        self.domain=domain
         # Classes
         self.element=Element(parent=self)
         self.item=Item(parent=self)
         self.edge=Edge(parent=self)
+        self.utils=Utils()
+        # SubClasses
         self.user=User(parent=self)
         self.usergroup=Usergroup(parent=self)
+        self.organisation=Organisation(parent=self)
         self.template=Template(parent=self)
-        # SubClasses
         self.project=Project(parent=self)
+        self.playlist=Playlist(parent=self)
         self.task=Task(parent=self)
         self.shot=Shot(parent=self)
         self.asset=Asset(parent=self)
@@ -86,11 +121,24 @@ class Aquarium(object):
             headers=dict(authorization=token)
             headers.update(JSON_CONTENT_TYPE)
 
+        if (self.domain):
+            headers['aquarium-domain'] = self.domain
+
         args=list(args)
         typ=args[0]
-        path=self.api_url
+        path = self.api_url
+
         if len(args) > 1:
-            path += '/'+args[1]
+            is_files = args[1].find('/files/') >= 0
+            if (is_files):
+                path = urljoin(path, args[1])
+            else:
+                path = urljoin(path, '{api_version}/{endpoint}'.format(
+                    api_version=self.api_version,
+                    endpoint=args[1]
+                ))
+        else:
+            path = urljoin(path, self.api_version)
 
         logger.debug('Send request : %s %s', typ, path)
         self.session.headers.update(headers)
@@ -120,6 +168,8 @@ class Aquarium(object):
                 type=data.get('type')
                 if type=='Project':
                     cls=self.project
+                elif type=='Playlist':
+                    cls=self.playlist
                 elif type=='User':
                     cls=self.user
                 elif type=='Template':
@@ -132,6 +182,8 @@ class Aquarium(object):
                     cls=self.shot
                 elif type=='Task':
                     cls=self.task
+                elif type=='Organisation':
+                    cls=self.organisation
                 else:
                     cls=self.item
             #As Edge
@@ -142,7 +194,7 @@ class Aquarium(object):
 
         return value
 
-    def connect(self, email='', password=''):
+    def signin(self, email='', password=''):
         """
         Sign in a user with its email and password
 
@@ -151,30 +203,63 @@ class Aquarium(object):
         :param      password:  The password of the user
         :type       password:  string
         """
-        return self.user.connect(email=email, password=password)
+        return self.user.signin(email=email, password=password)
 
-    def logout(self):
+    def connect(self, email='', password=''):
+        """
+        Alias of :func:`~aquarium.aquarium.Aquarium.signin`
+        """
+        return self.user.signin(email=email, password=password)
+
+    def signout(self):
         """
         Sign out current user by clearing the stored authentication token
 
         .. note::
-            After a :func:`~aquarium.aquarium.Aquarium.logout`, you need to use a :func:`~aquarium.aquarium.Aquarium.connect` before sending authenticated requests
+            After a :func:`~aquarium.aquarium.Aquarium.signout`, you need to use a :func:`~aquarium.aquarium.Aquarium.signin` before sending authenticated requests
 
         :returns: None
         """
         logger.info('Disconnect current user')
         logger.debug('Clear authentication token for logout')
-        self.token=''
+        self.user.signout()
+
+    def logout(self):
+        """
+        Alias of :func:`~aquarium.aquarium.Aquarium.signout`
+        """
+        self.signout()
+
+    def me(self):
+        """
+        Alias of :func:`~aquarium.aquarium.Aquarium.get_current_user`
+
+
+        :returns:   A :class:`~aquarium.items.user.User` instance of the connected user.
+        :rtype:     :class:`~aquarium.items.user.User` object
+        """
+        return self.get_current_user()
 
     def get_current_user(self):
         """
-        Gets the user profil of the connected user
+        Alias of :func:`~aquarium.items.user.User.get_current`
+
 
         :returns:   A :class:`~aquarium.items.user.User` instance of the connected user.
         :rtype:     :class:`~aquarium.items.user.User` object
         """
         result=self.user.get_current()
         return result
+
+    def mine(self):
+        """
+        Alias of :func:`~aquarium.items.user.User.get_profile`
+
+
+        :returns:   User, Usergroups and Organisations object
+        :rtype:     Dict {user: :class:`~aquarium.items.user.User`, usergroups: [:class:`~aquarium.items.usergroup.Usergroup`], organisations: [:class:`~aquarium.items.organisation.Organisation`]}
+        """
+        return self.user.get_profile()
 
     def get_server_status(self):
         """
@@ -185,6 +270,52 @@ class Aquarium(object):
         """
         result=self.do_request('GET', 'status')
         return result
+
+    def ping (self):
+        """
+        Ping Aquarium server
+
+        :returns: Ping response: pong
+        :rtype:   string
+        """
+        ping = self.do_request('GET', 'ping', decoding=False)
+        return ping.text
+
+    def get_users (self):
+        """
+        Get all users
+
+        :returns: List of all users
+        :rtype:   List of :class:`~aquarium.items.user.User`
+        """
+
+        users = self.do_request('GET', 'users')
+
+        users = [self.cast(user) for user in users]
+        return users
+
+    def create_user (self, email, name=None):
+        """
+        Create a new user
+
+        :param      email:  The email of the new user
+        :type       email:  string
+        :param      name:   The name of the new user
+        :type       name:   string, optional
+
+        :returns:   User object
+        :rtype:     :class:`~aquarium.items.user.User`
+        """
+
+        payload = dict(email=email)
+        if name != None:
+            payload['name'] = name
+
+        user = self.do_request(
+            'POST', 'users', data=json.dumps(payload))
+
+        user = self.cast(user)
+        return user
 
     def upload_file(self, path=''):
         """
@@ -208,7 +339,10 @@ class Aquarium(object):
 
     def query(self, meshql='', aliases={}):
         """
-        Query Entitys
+        Query entities
+
+        .. tip::
+            For better performances, we advice you to use the function :func:`~aquarium.item.Item.traverse`
 
         :param      meshql:        The meshql string
         :type       meshql:        string
@@ -223,3 +357,17 @@ class Aquarium(object):
         data=dict(query=meshql, aliases=aliases)
         result=self.do_request('POST', 'query', data=json.dumps(data))
         return result
+
+    def get_file(self, file_path):
+        """
+        Get stored file on Aquarium server
+
+        :param      file_path:     The file path from item property (Exemple: `/files/file_id.jpg`)
+        :type       file_path:     string
+
+        :returns:   The file
+        :rtype:     list
+        """
+
+        response = self.do_request('GET', file_path, decoding=False)
+        return response.content
