@@ -150,7 +150,7 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
         }
 
         projects = self.aq.query(
-            meshql="# ($Project AND (item.data.completion >= 0 OR item.data.completion == null) AND NOT <($Trash)- *) SORT item.updatedAt DESC VIEW $view",
+            meshql="# ($Project AND (item.data.completion >= 0 OR item.data.completion == null) AND NOT (<($Trash)- *)) SORT item.updatedAt DESC VIEW $view",
             aliases=aliases
         )
         return projects
