@@ -24,13 +24,15 @@
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
-import os
+import urllib.parse
 
+def baseUrl(base, url):
+    if url: return urllib.parse.urljoin(base, url)
+    else: return None
 
-class Prism_Aquarium_Variables(object):
-    def __init__(self, core, plugin):
-        self.version = "v2.0.0-beta.1"
-        self.pluginName = "Aquarium"
-        self.pluginType = "Custom"
-        self.platforms = ["Windows"]
-        self.pluginDirectory = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
+def hexToRgb(hex):
+    rgb = None
+    if (hex and type(hex) == str):
+        [hashtag, color] = hex.split('#')
+        if (color): rgb = list(int(color[i:i+2], 16) for i in (0, 2, 4))
+    return rgb

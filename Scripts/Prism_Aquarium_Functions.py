@@ -11,671 +11,770 @@
 ####################################################
 #
 #
-# Copyright (C) 2016-2020 Richard Frangenberg
+# Copyright (C) 2016-2023 Richard Frangenberg
+# Copyright (C) 2023 Prism Software GmbH
 #
-# Licensed under GNU GPL-3.0-or-later
+# Licensed under proprietary license. See license file in the directory of this plugin for details.
 #
-# This file is part of Prism.
+# This file is part of Prism-Plugin-Aquarium.
+# It's created by Yann Moriaud, from Fatfish Lab
+# Contact support@fatfi.sh for any issue related to this plugin
 #
-# Prism is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# Prism is distributed in the hope that it will be useful,
+# Prism-Plugin-Aquarium is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Prism.  If not, see <https://www.gnu.org/licenses/>.
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
 
 import os
 import sys
+import importlib
 import logging
+import traceback
+from datetime import datetime
+import time
 
-try:
-    from PySide2.QtCore import *
-    from PySide2.QtGui import *
-    from PySide2.QtWidgets import *
-except:
-    from PySide.QtCore import *
-    from PySide.QtGui import *
-
-if sys.version[0] == "3":
-    pVersion = 3
-else:
-    pVersion = 2
+from qtpy.QtCore import *
+from qtpy.QtGui import *
+from qtpy.QtWidgets import *
 
 from PrismUtils.Decorators import err_catcher_plugin as err_catcher
 
+from Prism_Aquarium_Utils import baseUrl
+from Prism_Aquarium_Utils import hexToRgb
 
 logger = logging.getLogger(__name__)
+
 
 class Prism_Aquarium_Functions(object):
     def __init__(self, core, plugin):
         self.core = core
         self.plugin = plugin
+        if self.isActive():
+            extModPath = os.path.join(self.pluginDirectory, "ExternalModules")
 
+            if extModPath not in sys.path:
+                sys.path.append(extModPath)
+
+            self.name = "Aquarium"
+
+            self.dbCache = {}
+            self.requestInProgress = False
+
+            self.requiresLogin = True
+            self.hasRemoteDatabase = True
+            self.hasNotes = True
+            self.hasTaskAssignment = True
+            self.publishVersionNameFromFilename = False
+            self.episodeSeparator = "__"
+            self.register()
+
+    # if returns true, the plugin will be loaded by Prism
     @err_catcher(name=__name__)
     def isActive(self):
         return True
 
-    @err_catcher(name=__name__)
-    def onProjectChanged(self, origin):
-        pass
-    
-    @err_catcher(name=__name__)
-    def messageCreationInfo (self, created, type = 'items', title = "Aquarium Studio sync"):
-        message = ""
-        if len(created) > 0:
-            message = "The following {type} were created:\n\n".format(
-                type=type
-            )
+    @property
+    def aq_api(self):
+        if not hasattr(self, "_aq_api"):
+            self._aq_api = importlib.import_module("aquarium")
 
-            created.sort()
-
-            for i in created:
-                message += i + "\n"
-        else:
-            message = "No {type} were created.".format(
-                type=type
-            )
-
-        QMessageBox.information(self.core.messageParent, title, message)
-    
-    @err_catcher(name=__name__)
-    def messageInfo (self, message = '', title = "Aquarium Studio sync"):
-        QMessageBox.information(self.core.messageParent, title, message)
-    
-    @err_catcher(name=__name__)
-    def messageWarning (self, message = '', title = "Aquarium Studio sync"):
-        QMessageBox.warning(self.core.messageParent, title, message)
-    
-    @err_catcher(name=__name__)
-    def messageConfirm (self, message = '', title = "Aquarium Studio sync"):
-        confirmButton = QMessageBox.question(
-            self.core.messageParent,
-            title,
-            message,
-            QMessageBox.Yes | QMessageBox.Cancel,
-            QMessageBox.Yes)
-
-        if confirmButton == QMessageBox.Yes:
-            return True
-        elif confirmButton == QMessageBox.Cancel:
-            return False
-        else:
-            return False
+        return self._aq_api
 
     @err_catcher(name=__name__)
-    def prismSettings_loadUI(self, origin):
-        # User settings tab
-        origin.gb_aqAccount = QGroupBox("Connect to Aquarium Studio")
-        lo_aq = QGridLayout()
-        origin.gb_aqAccount.setLayout(lo_aq)
-        origin.gb_aqAccount.setChecked(False)
-
-        origin.l_aqUserName = QLabel("Email:")
-        origin.l_aqUserPassword = QLabel("Password:")
-        origin.e_aqUserEmail = QLineEdit()
-        origin.e_aqUserPassword = QLineEdit()
-        origin.e_aqUserPassword.setEchoMode(QLineEdit.Password)
-        origin.b_aqConnect = QPushButton('Signin to Aquarium Studio')
-        origin.b_aqConnect.clicked.connect(
-            lambda: self.connect(origin)
-        )
-        origin.l_testConnect = QLabel('')
-
-        lo_aq.addWidget(origin.l_aqUserName)
-        lo_aq.addWidget(origin.l_aqUserPassword)
-        lo_aq.addWidget(origin.e_aqUserEmail, 0, 1)
-        lo_aq.addWidget(origin.e_aqUserPassword, 1, 1)
-        lo_aq.addWidget(origin.b_aqConnect, 2, 1)
-        lo_aq.addWidget(origin.l_testConnect, 3, 1)
-
-        origin.tabWidgetPage1.layout().insertWidget(1, origin.gb_aqAccount)
-        origin.groupboxes.append(origin.gb_aqAccount)
-
-        #Project settings tab
-        origin.gb_aqPrjIntegration = QGroupBox("Aquarium Studio integration")
-        origin.w_aquarium = QWidget()
-        lo_aqI = QHBoxLayout()
-        lo_aqI.addWidget(origin.w_aquarium)
-        origin.gb_aqPrjIntegration.setLayout(lo_aqI)
-        origin.gb_aqPrjIntegration.setCheckable(True)
-        origin.gb_aqPrjIntegration.setChecked(False)
-
-        lo_aq = QGridLayout()
-        origin.w_aquarium.setLayout(lo_aq)
-
-        origin.l_aqSite = QLabel("Aquarium Studio site:")
-        origin.l_aqProject = QLabel("Aquarium project:")
-        
-        origin.e_aqSite = QLineEdit()
-        origin.c_aqProject = QComboBox()
-        origin.c_aqProject.currentIndexChanged.connect(
-            lambda: self.changeAqProject(origin)
-        )
-        origin.b_aqRefreshProjects = QPushButton('Refresh projects')
-        origin.b_aqRefreshProjects.clicked.connect(
-            lambda: self.listAqProjects(origin)
-        )
-        origin.l_aqProjectChanged = QLabel('')
-        origin.l_aqProjectChanged.setStyleSheet("color: #f03e3e;")
-        origin.l_aqProjectNoPrismProperties = QLabel('')
-        origin.l_aqProjectNoPrismProperties.setStyleSheet("color: #f76707;")
-        origin.b_aqConnectUser = QPushButton('Save and go to "User" tab to add your Aquarium credentials')
-        origin.b_aqConnectUser.clicked.connect(
-            lambda: self.goToUserSettings(origin)
-        )
-        
-        lo_aq.addWidget(origin.l_aqSite, 0, 0)
-        lo_aq.addWidget(origin.l_aqProject, 2, 0)
-        
-        lo_aq.addWidget(origin.e_aqSite, 0, 1)
-        lo_aq.addWidget(origin.b_aqConnectUser, 1, 1)
-        lo_aq.addWidget(origin.c_aqProject, 2, 1)
-        lo_aq.addWidget(origin.b_aqRefreshProjects, 2, 2)
-        lo_aq.addWidget(origin.l_aqProjectChanged, 3, 1)
-        lo_aq.addWidget(origin.l_aqProjectNoPrismProperties, 4, 1)
-
-        num = origin.w_prjSettings.layout().count() - 1
-        origin.w_prjSettings.layout().insertWidget(num, origin.gb_aqPrjIntegration)
-        origin.groupboxes.append(origin.gb_aqPrjIntegration)
-
-        origin.gb_aqPrjIntegration.toggled.connect(
-            lambda x: self.prismSettings_aqToggled(origin, x)
-        )
-
-    @err_catcher(name=__name__)
-    def prismSettings_loadSettings(self, origin, settings):
-        connected = self.connectToAquarium()
-        self.connectedToAquarium(origin, connected=connected)
-
-
-    @err_catcher(name=__name__)
-    def prismSettings_loadPrjSettings(self, origin, settings):
-        if "aquarium" in settings:
-            if "active" in settings["aquarium"]:
-                origin.gb_aqPrjIntegration.setChecked(settings["aquarium"]["active"])
-
-            if "site" in settings["aquarium"]:
-                origin.e_aqSite.setText(settings["aquarium"]["site"])
-
-            self.listAqProjects(origin)
-
-        self.prismSettings_aqToggled(origin, origin.gb_aqPrjIntegration.isChecked())
-
-    @err_catcher(name=__name__)
-    def prismSettings_saveSettings(self, origin, settings):
-        if "aquarium" not in settings:
-            settings["aquarium"] = {}
-        
-        if (self.aq and self.aq.token):
-            settings["aquarium"]["token"] = self.aq.token
-        else:
-            settings["aquarium"]["token"] = ''
-
-    @err_catcher(name=__name__)
-    def prismSettings_savePrjSettings(self, origin, settings):
-        if "aquarium" not in settings:
-            settings["aquarium"] = {}
-
-        settings["aquarium"]["active"] = origin.gb_aqPrjIntegration.isChecked()
-        settings["aquarium"]["site"] = origin.e_aqSite.text()
-        settings["aquarium"]["projectkey"] = origin.c_aqProject.currentData()
-        
-        origin.l_aqProjectChanged.setText("")
-        origin.l_aqProjectNoPrismProperties.setText("")
-
-    @err_catcher(name=__name__)
-    def connect (self, origin):
-        connected = self.connectToAquarium()
-
-        if connected:
-            self.aq.logout()
-            connected = False
-        else:
-            email = origin.e_aqUserEmail.text()
-            password = origin.e_aqUserPassword.text()
-            token = self.core.getConfig('aquarium', 'token')
-            connected = self.connectToAquarium(email=email, password=password, token=token)
-            if (connected):
-                settings = self.core.getConfig(configPath=self.core.prismIni)
-                self.prismSettings_loadPrjSettings(origin, settings)
-
-        self.connectedToAquarium(origin, connected=connected)
-        self.core.ps.saveSettings(changeProject=False)
-    
-    @err_catcher(name=__name__)
-    def connectedToAquarium(self, origin, connected):
-        if connected:
-            origin.l_testConnect.setText('Hello {username}, your are connected.{information}'.format(
-                username=self.aqUser.data.name,
-                information='' if self.aqProject else "\nDon't forget to finish to configure the project settings !"))
-            origin.e_aqUserEmail.setText(self.aqUser.data.email)
-            origin.l_testConnect.setStyleSheet("color: #37b24d;")
-            origin.b_aqConnect.setText('Signout')
-            origin.e_aqUserPassword.setEnabled(False)
-            origin.e_aqUserEmail.setEnabled(False)
-        else:
-            origin.l_testConnect.setText('You are not connected to Aquarium.')
-            origin.l_testConnect.setStyleSheet("color: #f03e3e;")
-            origin.b_aqConnect.setText('Signin to Aquarium Studio')
-            origin.e_aqUserPassword.setText('')
-            origin.e_aqUserPassword.setEnabled(True)
-            origin.e_aqUserEmail.setEnabled(True)
-            
-    @err_catcher(name=__name__)
-    def prismSettings_aqToggled(self, origin, checked):
-        origin.w_aquarium.setVisible(checked)
-        # origin.gb_aqAccount.setVisible(checked)
-
-    @err_catcher(name=__name__)
-    def pbBrowser_getMenu(self, origin):
-        prjman = self.core.getConfig(
-            "aquarium", "active", configPath=self.core.prismIni
-        )
-        if prjman:
-            prjmanMenu = QMenu("Aquarium Studio", origin)
-
-            # actprjman = QAction("Open Aquarium Studio", origin)
-            # actprjman.triggered.connect(self.openprjman)
-            # prjmanMenu.addAction(actprjman)
-
-            # prjmanMenu.addSeparator()
-            
-            actSSL = QAction("Sync Aquarium > Prism", origin)
-            actSSL.triggered.connect(lambda: self.aqSync(origin, 'prism'))
-            prjmanMenu.addAction(actSSL)
-
-            prjmanMenu.addSeparator()
-            
-            actSSL = QAction("Sync Prism > Aquarium", origin)
-            actSSL.triggered.connect(lambda: self.aqSync(origin, 'aquarium'))
-            prjmanMenu.addAction(actSSL)
-            
-            prjmanMenu.addSeparator()
-            
-            actSSL = QAction("Timelogs", origin)
-            actSSL.triggered.connect(lambda: self.aqTimelogs(origin))
-            prjmanMenu.addAction(actSSL)
-
-            return prjmanMenu
-
-    @err_catcher(name=__name__)
-    def createAsset_open(self, origin):
-        isAqActive = self.core.getConfig(
-            "aquarium", "active", configPath=self.core.prismIni
-        )
-        if not isAqActive:
+    def register(self):
+        self.prjMng = self.core.getPlugin("ProjectManagement")
+        if not self.prjMng:
+            self.core.registerCallback("pluginLoaded", self.onPluginLoaded, plugin=self.plugin)
             return
 
-        origin.gb_createInAq = QGroupBox("Create asset in Aquarium Studio")
-        lo_aq = QGridLayout()
-        origin.gb_createInAq.setLayout(lo_aq)
-        origin.gb_createInAq.setCheckable(True)
-        origin.gb_createInAq.setChecked(True)
-
-        origin.w_options.layout().insertWidget(0, origin.gb_createInAq)
-
-        connected = self.connectToAquarium()
-        if (not connected):
-            origin.l_notConnected = QLabel("You are not connected to Aquarium.\nPlease check 'User' and 'Project' settings.")
-            origin.l_notConnected.setStyleSheet("color: #f03e3e;")
-            lo_aq.addWidget(origin.l_notConnected)
-        else:
-            origin.chb_applyTemplate = QCheckBox("Use automatic context's template for creation.")
-            origin.chb_applyTemplate.setChecked(True)
-            lo_aq.addWidget(origin.chb_applyTemplate)
+        self.prjMng.registerManager(self)
+        self.core.registerCallback("onProjectCreationSettingsReloaded", self.onProjectCreationSettingsReloaded, plugin=self.plugin)
 
     @err_catcher(name=__name__)
-    def createAsset_typeChanged(self, origin, state):
-        if hasattr(origin, "gb_createInAq"):
-            origin.gb_createInAq.setEnabled(state)
+    def unregister(self):
+        if getattr(self, "prjMng"):
+            self.prjMng.unregisterManager(self.name)
 
     @err_catcher(name=__name__)
-    def assetCreated(self, origin, itemDlg, assetPath):
-        if (
-            hasattr(itemDlg, "gb_createInAq")
-            and itemDlg.gb_createInAq.isChecked()
-        ):
-            applyTemplate = None
-            if (
-                hasattr(itemDlg, "chb_applyTemplate")
-                and itemDlg.chb_applyTemplate.isChecked()
-            ):
-                applyTemplate = True
-
-            createdAssets = self.createAqAssets([assetPath], applyTemplate=applyTemplate)
-            self.messageCreationInfo(createdAssets, type='assets')
+    def onPluginLoaded(self, plugin):
+        if plugin.pluginName == "ProjectManagement":
+            self.register()
 
     @err_catcher(name=__name__)
-    def editShot_open(self, origin, shotname):
-        shotName, seqName = self.core.entities.splitShotname(shotname)
-        if not shotName:
-            isAqActive = self.core.getConfig(
-                "aquarium", "active", configPath=self.core.prismIni
-            )
-            if not isAqActive:
-                return
+    def onProjectCreationSettingsReloaded(self, settings):
+        # QUESTION: What's the goal of the function ?
+        if "prjManagement" not in settings:
+            return
 
-            origin.gb_createInAq = QGroupBox("Create shot in Aquarium Studio")
-            lo_aq = QGridLayout()
-            origin.gb_createInAq.setLayout(lo_aq)
-            origin.gb_createInAq.setCheckable(True)
-            origin.gb_createInAq.setChecked(True)
+        if "aquarium_projectKey" not in settings["prjManagement"]:
+            return
 
-            origin.widget.layout().insertWidget(0, origin.gb_createInAq)
-
-            connected = self.connectToAquarium()
-            if (not connected):
-                origin.l_notConnected = QLabel("You are not connected to Aquarium.\nPlease check 'User' and 'Project' settings.")
-                origin.l_notConnected.setStyleSheet("color: #f03e3e;")
-                lo_aq.addWidget(origin.l_notConnected)
-            else:
-                origin.chb_applyTemplate = QCheckBox("Use automatic context's template for creation.")
-                origin.chb_applyTemplate.setChecked(True)
-                lo_aq.addWidget(origin.chb_applyTemplate)
+        del settings["prjManagement"]["aquarium_projectKey"]
 
     @err_catcher(name=__name__)
-    def editShot_closed(self, itemDlg, shotName):
-        if (
-            hasattr(itemDlg, "gb_createInAq")
-            and itemDlg.gb_createInAq.isChecked()
-        ):
-            applyTemplate = None
-            if (
-                hasattr(itemDlg, "chb_applyTemplate")
-                and itemDlg.chb_applyTemplate.isChecked()
-            ):
-                applyTemplate = True
-
-            self.createAqShots([shotName], applyTemplate=applyTemplate)
+    def getRequiredAuthorization(self):
+        # QUESTION: How to prompt to the user email + password but store a token
+        data = [
+            {"name": "aquarium_token", "label": "Token", "isSecret": True, "type": "QLineEdit"},
+            # {"name": "aquarium_email", "label": "Username", "isSecret": False, "type": "QLineEdit"},
+            # {"name": "aquarium_password", "label": "Password", "isSecret": True, "type": "QLineEdit"},
+        ]
+        return data
 
     @err_catcher(name=__name__)
-    def pbBrowser_getPublishMenu(self, origin):
-        isAqActive = self.core.getConfig(
-            "aquarium", "active", configPath=self.core.prismIni
-        )
-        if (
-            isAqActive and origin.mediaPlaybacks["shots"]["seq"]
-        ):
-            prjmanAct = QAction("Publish to Aquarium Studio", origin)
-            prjmanAct.triggered.connect(lambda: self.aqPublish(origin))
-            return prjmanAct
+    def getIcon(self):
+        path = os.path.join(self.pluginDirectory, "Resources", "aquarium.png")
+        return QPixmap(path)
 
     @err_catcher(name=__name__)
-    def listAqProjects(self, origin):
-        connected = self.connectToAquarium()
-        if connected:
-            projects = self.getAqProjects()
-            origin.c_aqProject.clear()
-            origin.c_aqProject.addItem('Select the corresponding {activeProject} project on Aquarium Studio'.format(
-                activeProject=self.core.getConfig('globals', 'project_name', configPath=self.core.prismIni)
-                ), None)
-            for project in projects:
-                origin.c_aqProject.addItem(project['name'], project['_key'])
-            if (self.aqProject):
-                index = origin.c_aqProject.findData(self.aqProject._key)
-                if index >= 0:
-                    origin.c_aqProject.setCurrentIndex(index)
-        else:
-            activeProjectKey = self.core.getConfig('aquarium', 'projectkey', configPath=self.core.prismIni)
-            origin.c_aqProject.clear()
-            if (activeProjectKey):
-                origin.c_aqProject.addItem("Project ({projectKey}) already set, but can't get project from Aquarium yet.".format(
-                    projectKey=activeProjectKey
-                ), activeProjectKey)
-            else:
-                origin.c_aqProject.addItem("No project selected yet. Please connect to Aquarium first.", None)
+    def getLoginName(self):
+        # QUESTION: What's the goal of that function
+        data = self.prjMng.getAuthorization() or {}
+        return data.get("aquarium_email")
 
     @err_catcher(name=__name__)
-    def changeAqProject(self, origin):
-        currentProjectKey = self.core.getConfig('aquarium', 'projectkey', configPath=self.core.prismIni)
-        self.aqProject = self.getAqProject(projectKey=origin.c_aqProject.currentData())
-        if currentProjectKey != origin.c_aqProject.currentData():
-            origin.l_aqProjectChanged.setText("Warning : project changed. Don't forget to save or apply your modifications.")
-        else:
-            origin.l_aqProjectChanged.setText("")
-
-        if self.aqProject and self.aqProject.prism['properties'] == None:
-            origin.l_aqProjectNoPrismProperties.setText("The project seems to have no configuration for Prism. Please check project's settings on Aquarium Studio")
-        else:
-            origin.l_aqProjectNoPrismProperties.setText("")
-
-    @err_catcher(name=__name__)
-    def goToUserSettings(self, origin):
-        self.core.ps.saveSettings(changeProject=False)
-        
-        connected = self.connectToAquarium()
-        self.connectedToAquarium(origin, connected=connected)
-        if (connected):
-            self.listAqProjects(origin)
-        
-        # TODO: Improve index by loop in tabs
-        self.core.ps.tw_settings.setCurrentIndex(1)
-
-    @err_catcher(name=__name__)
-    def createAqAssets(self, assets=[], applyTemplate = None):
-        createdAssets = []
-        connected = self.connectToAquarium()
-        location = self.getAssetsLocation()
-
-        folders = [self.aq.cast(sequence) for sequence in self.aq.item(location).traverse(meshql='# -($Child)> $Group VIEW item')]
-
-        if connected:
-
-            aBasePath = self.core.getAssetPath()
-            assets = [[os.path.basename(path), path.replace(aBasePath, "").replace(os.path.basename(path), "")[1:-1]] for path in assets]
-            
-            for assetName, folderName in assets:
-                assetLocation = location
-                folderNames = (folder for folder in folders if folder.data.name == folderName)
-                folder = next(folderNames, None)
-                if folder:
-                    assetLocation = folder._key
-                
-                asset = self.aq.item(assetLocation).append(type='Asset', data={'name': assetName}, apply_template=applyTemplate)
-                createdAssets.append(asset.item.data.name)
-            
-        return createdAssets
-
-    @err_catcher(name=__name__)
-    def createAqShots(self, shots=[], applyTemplate = None):
-        createdShots = []
-        connected = self.connectToAquarium()
-        location = self.getShotsLocation()
-
-        sequences = [self.aq.cast(sequence) for sequence in self.aq.item(location).traverse(meshql='# -($Child)> $Group VIEW item')]
-
-        if connected:
-            for prismShot in shots:
-                shotLocation = location
-                shotName, seqName = self.core.entities.splitShotname(prismShot)
-                if seqName == "no sequence":
-                    seqName = ""
-
-                sequenceNames = (sequence for sequence in sequences if sequence.data.name == seqName)
-                sequence = next(sequenceNames, None)
-                
-                if (sequence and sequence._key):
-                    shotLocation = sequence._key
-                else:
-                    logger.debug('Sequence do not exist, create it before shot')
-                
-                frameIn, frameOut = self.core.entities.getShotRange(prismShot)
-                shot = self.aq.item(shotLocation).append(type='Shot', data={'name': shotName, 'frameIn': frameIn, 'frameOut': frameOut}, apply_template=applyTemplate)
-                createdShots.append(shot.item.data.name)
-            
-        return createdShots
-
-    @err_catcher(name=__name__)
-    def aqTimelogs(self, origin):
-        try:
-            del sys.modules["AquariumTimelogs"]
-        except:
-            pass
-
-        import AquariumTimelogs
-
-        if origin.tbw_browser.currentWidget().property("tabType") == "Assets":
-            pType = "Asset"
-        else:
-            pType = "Shot"
-
-        aqt = AquariumTimelogs.aqTimelogs(
-            core=self.core,
-            origin=self,
-            ptype=pType
-        )
-
-        self.core.parentWindow(aqt)
-        aqt.exec_()
-
-    @err_catcher(name=__name__)
-    def aqSync(self, origin, target):
-        try:
-            del sys.modules["AquariumSync"]
-        except:
-            pass
-
-        import AquariumSync
-
-        if origin.tbw_browser.currentWidget().property("tabType") == "Assets":
-            pType = "Asset"
-        else:
-            pType = "Shot"
-
-        aqs = AquariumSync.aqSync(
-            core=self.core,
-            origin=self,
-            ptype=pType,
-            target=target
-        )
-
-        self.core.parentWindow(aqs)
-        aqs.exec_()
-
-    @err_catcher(name=__name__)
-    def aqPublish(self, origin):
-        try:
-            del sys.modules["AquariumPublish"]
-        except:
-            pass
-
-        import AquariumPublish
-
-        if origin.tbw_browser.currentWidget().property("tabType") == "Assets":
-            pType = "Asset"
-        else:
-            pType = "Shot"
-
-        shotName = os.path.basename(origin.renderBasePath)
-
-        taskName = (
-            origin.curRTask.replace(" (playblast)", "")
-            .replace(" (2d)", "")
-            .replace(" (external)", "")
-        )
-        versionName = origin.curRVersion.replace(" (local)", "")
-
-        imgPaths = []
-        if (
-            origin.mediaPlaybacks["shots"]["prvIsSequence"]
-            or len(origin.mediaPlaybacks["shots"]["seq"]) == 1
-        ):
-            if os.path.splitext(origin.mediaPlaybacks["shots"]["seq"][0])[1] in [
-                ".mp4",
-                ".mov",
-            ]:
-                imgPaths.append(
-                    [
-                        os.path.join(
-                            origin.mediaPlaybacks["shots"]["basePath"],
-                            origin.mediaPlaybacks["shots"]["seq"][0],
-                        ),
-                        origin.mediaPlaybacks["shots"]["curImg"],
-                    ]
-                )
-            else:
-                imgPaths.append(
-                    [
-                        os.path.join(
-                            origin.mediaPlaybacks["shots"]["basePath"],
-                            origin.mediaPlaybacks["shots"]["seq"][
-                                origin.mediaPlaybacks["shots"]["curImg"]
-                            ],
-                        ),
-                        0,
-                    ]
-                )
-        else:
-            for i in origin.mediaPlaybacks["shots"]["seq"]:
-                imgPaths.append(
-                    [os.path.join(origin.mediaPlaybacks["shots"]["basePath"], i), 0]
-                )
-
-        if "pstart" in origin.mediaPlaybacks["shots"]:
-            sf = origin.mediaPlaybacks["shots"]["pstart"]
-        else:
-            sf = 0
-
-        aqp = AquariumPublish.aqPublish(
-            core=self.core,
-            origin=self,
-            ptype=pType,
-            shotName=shotName,
-            task=taskName,
-            version=versionName,
-            sources=imgPaths,
-            startFrame=sf,
-        )
-        # if not hasattr(aqp, "sgPrjId") or not hasattr(aqp, "sgUserId"):
+    def getAllUsernames(self):
+        # TODO: Make it compatible with Aquarium
+        return
+        # prjId = self.getCurrentProjectId()
+        # if prjId is None:
         #     return
 
-        self.core.parentWindow(aqp)
-        aqp.exec_()
+        # filters = [["projects", "is", {"type": "Project", "id": prjId}]]
+        # fields = ["name"]
+        # text = "Querying usernames - please wait..."
+        # popup = self.core.waitPopup(self.core, text, hidden=True)
+        # with popup:
+        #     users = self.makeDbRequest("find", ["HumanUser", filters, fields], popup=popup)
 
-        curTab = origin.tbw_browser.currentWidget().property("tabType")
-        curData = [
-            curTab,
-            origin.cursShots,
-            origin.curRTask,
-            origin.curRVersion,
-            origin.curRLayer,
+        # users = [user["name"] for user in users]
+        # loginName = self.getUsername()
+        # if loginName not in users:
+        #     users.insert(0, loginName)
+
+        # return users
+
+    @err_catcher(name=__name__)
+    def getDefaultStatus(self):
+        # TODO: Improve products, media and tasks statuses
+        statuses = []
+        aqStatuses = self.getAqProjectStatuses()
+
+        for aqStatus in aqStatuses:
+            status = {
+                "name": aqStatus['status'],
+                "abbreviation": aqStatus['status'],
+                "color": hexToRgb(aqStatus['color']),
+                "products": True,
+                "media": True,
+                "tasks": True,
+            }
+            statuses.append(status)
+
+        return statuses
+
+    @err_catcher(name=__name__)
+    def getProjectSettings(self):
+        # dftStatus = self.getDefaultStatus()
+        data = [
+            {"name": "aquarium_setup", "label": "Setup...", "tooltip": "Opens a setup window to guide you through the process of connecting your Aquarium project to your Prism project.", "type": "QPushButton", "callback": self.prjMng.openSetupDlg},
+            {"name": "aquarium_url", "label": "Url", "type": "QLineEdit"},
+            {"name": "aquarium_projectKey", "label": "Project", "type": "QComboBox"},
+            # {"name": "aquarium_versionPubStatus", "label": "Status of published versions", "type": "QLineEdit", "default": "rev"},
+            {"name": "aquarium_showTaskStatus", "label": "Show Task Status", "type": "QCheckBox", "default": True},
+            # {"name": "aquarium_showProductStatus", "label": "Show Product Status", "type": "QCheckBox", "default": True},
+            # {"name": "aquarium_showMediaStatus", "label": "Show Media Status", "type": "QCheckBox", "default": True},
+            {"name": "aquarium_allowNonExistentTaskPublishes", "label": "Allow publishes from non-existent tasks", "type": "QCheckBox", "default": True},
+            {"name": "aquarium_allowLocalTasks", "label": "Allow local tasks", "type": "QCheckBox", "default": False},
+            {"name": "aquarium_useUsername", "label": "Use Aquarium usernames", "type": "QCheckBox", "default": True},
+            # {"name": "aquarium_syncDepartments", "label": "Auto Sync Departments", "type": "QCheckBox", "default": False},
+            # {"name": "aquarium_syncEntityConnections", "label": "Auto Sync Asset-Shot connections", "type": "QCheckBox", "default": False},
+            # {"name": "aquarium_shortDeps", "label": "Use short department names", "type": "QCheckBox", "default": False},
+            # {"name": "aquarium_syncDepsNow", "label": "Sync Departments", "tooltip": "Queries the existing departments in Aquarium and creates the same departments in the Prism project.", "type": "QPushButton", "callback": self.prjMng.syncDepartments},
+            # {"name": "aquarium_cacheInvalidation", "label": "Cache invalidation (sec)", "type": "QSpinBox", "default": -1, "tooltip": "The amount of seconds after which a cached request to the remote database gets invalidated. The next identical request will be send to the database instead of using a cached value.\n-1 means there will be no cache invalidation.\n0 means no cache will be used."},
+            # {"name": "aquarium_status", "label": "Available Status", "type": "status", "default": dftStatus},
         ]
-        origin.showRender(curData[0], curData[1], curData[2], curData[3], curData[4])
+        return data
 
     @err_catcher(name=__name__)
-    def openprjman(self, shotName=None, eType="Shot", assetPath=None):
-        self.messageInfo(message='Not available yet')
+    def getRemoteUrl(self):
+        url = self.core.getConfig("prjManagement", "aquarium_url", config="project") or ""
+        return url
+
+    @err_catcher(name=__name__)
+    def getExampleUrl(self):
+        return "https://company.aquarium.app"
+
+    @err_catcher(name=__name__)
+    def getCurrentUrl(self):
+        return self.aq.api_url
+
+    @err_catcher(name=__name__)
+    def openInBrowser(self, entityType, entity):
+        aqSite = self.aq.api_url
+        itemKey = entity['id']
+        url = aqSite + "/#/open/%s" % (itemKey)
+        self.core.openWebsite(url)
+
+    @err_catcher(name=__name__)
+    def showTaskStatus(self):
+        # TODO: Handle that option
+        return self.core.getConfig("prjManagement", "aquarium_showTaskStatus", config="project", dft=True)
+
+    @err_catcher(name=__name__)
+    def showProductStatus(self):
+        # TODO: Handle that option
+        return self.core.getConfig("prjManagement", "aquarium_showProductStatus", config="project", dft=True)
+
+    @err_catcher(name=__name__)
+    def showMediaStatus(self):
+        # TODO: By default Aquarium doesn't have any status
+        return self.core.getConfig("prjManagement", "aquarium_showMediaStatus", config="project", dft=True)
+
+    @err_catcher(name=__name__)
+    def getAllowNonExistentTaskPublishes(self):
+        # TODO: Handle that option
+        return self.core.getConfig("prjManagement", "aquarium_allowNonExistentTaskPublishes", config="project", dft=True)
+
+    @err_catcher(name=__name__)
+    def getAllowLocalTasks(self):
+        # TODO: Handle that option
+        return self.core.getConfig("prjManagement", "aquarium_allowLocalTasks", config="project", dft=False)
+
+    @err_catcher(name=__name__)
+    def getUseAqUsername(self):
+        # QUESTION: What's the goal of that function ?
+        return self.core.getConfig("prjManagement", "aquarium_useUsername", config="project", dft=True)
+
+    @err_catcher(name=__name__)
+    def getSyncDepartments(self):
+        # TODO: Handle that option
+        return self.core.getConfig("prjManagement", "aquarium_syncDepartments", config="project", dft=False)
+
+    @err_catcher(name=__name__)
+    def getSyncEntityConnections(self):
+        # QUESTION: Can I delete that function ?
+        return self.core.getConfig("prjManagement", "aquarium_syncEntityConnections", config="project", dft=False)
+
+    @err_catcher(name=__name__)
+    def getUseShortDepartmentNames(self):
+        # QUESTION: Can I delete that function ?
+        return self.core.getConfig("prjManagement", "aquarium_shortDeps", config="project", dft=False)
+
+    @err_catcher(name=__name__)
+    def makeDbRequest(self, method, args=None, popup=None, allowCache=True):
+        # FIXME: Improve function based on Aquarium requirements
+        if not isinstance(args, list):
+            if args:
+                args = [args]
+            else:
+                args = []
+
+        if method not in self.dbCache:
+            self.dbCache[method] = []
+
+        if allowCache:
+            for request in self.dbCache[method]:
+                if request["args"] == args:
+                    return request["result"]
+        else:
+            self.dbCache[method] = [r for r in self.dbCache[method] if r["args"] != args]
+
+        if self.requestInProgress:
+            while self.requestInProgress:
+                time.sleep(0.1)
+
+            return self.makeDbRequest(method, args=args, popup=popup, allowCache=allowCache)
+
+        self.requestInProgress = True
+        logger.debug("make request: %s, %s" % (method, args))
+        if popup and not popup.msg:
+            popup.show()
+
+        try:
+            result = getattr(self.aq, method)(*args)
+        except Exception as e:
+            self.requestInProgress = False
+            # traceback.print_stack()
+            logger.debug(method)
+            logger.debug(args)
+            msg = "Could not request Aquarium data:\n\n%s" % e
+            self.core.popup(msg)
+            return
+
+        data = {"args": args, "result": result}
+        self.dbCache[method].append(data)
+        self.requestInProgress = False
+        return result
+
+    @err_catcher(name=__name__)
+    def clearDbCache(self):
+        self.dbCache = {}
+
+    @err_catcher(name=__name__)
+    def isLoggedIn(self):
+        if not self.aq:
+            return False
+
+        try:
+            token = self.aq.token
+        except Exception:
+            return False
+
+        loggedIn = bool(token)
+        return loggedIn
+
+    @err_catcher(name=__name__)
+    def login(self, auth=None, quiet=False):
+        if auth is None:
+            auth = self.prjMng.getAuthorization()
+
+        url = auth.get("url")
+        token = auth.get("aquarium_token")
+        self.core.users.setUserReadOnly(False)
+
+        if not url:
+            if not quiet:
+                msg = "No Aquarium Url is set in the project settings. Cannot connect to Aquarium."
+                result = self.core.popupQuestion(msg, buttons=["Setup Aquarium...", "Close"], icon=QMessageBox.Warning)
+                if result == "Setup Aquarium...":
+                    self.prjMng.openSetupDlg()
+
+            return
+
+        if not token:
+            if not quiet:
+                msg = "Your are not connected to Aquarium. Please go to you user settings > Project management and enter your credentials."
+                self.core.popup(msg)
+
+            return
+
+        url = url.strip("\\/")
+        try:
+            self.aq = self.aq_api.Aquarium(api_url=url, token=token)
+            self.aqProject = self.getCurrentProject()
+        except Exception as e:
+            logger.warning(traceback.format_exc())
+            if not quiet:
+                msg = "Failed to login into Aquarium:\n\n%s" % e
+                self.core.popup(msg)
+                return
+
+        if self.isLoggedIn():
+            logger.debug("logged in into Aquarium")
+            self.clearDbCache()
+            if self.getUseAqUsername():
+                self.prjMng.setLocalUsername()
+
+    @err_catcher(name=__name__)
+    def getUsername(self):
+        username = None
+        if self.aq:
+            user = self.aq.me()
+            if not user:
+                return
+            username = user.data.name
+
+        return username
+
+    @err_catcher(name=__name__)
+    def getProjects(self, parent=None):
+        # TODO: Move that Aquarium function
+        text = "Querying projects - please wait..."
+        popup = self.core.waitPopup(self.core, text, parent=parent, hidden=True)
+        with popup:
+            if not self.prjMng.ensureLoggedIn():
+                return
+
+            meshql = "# $Project AND (item.data.completion >= 0 OR item.data.completion == null) VIEW $view"
+            aliases = {
+                'view': {
+                    '_key': 'item._key',
+                    'name': 'item.data.name',
+                    "status": 'item.data.status',
+                    "start_date": "item.data.startDate",
+                    "end_date": "item.data.endDate",
+                    "thumbnail": "item.data.thumbnail",
+                }
+            }
+
+            aqProjects = self.makeDbRequest("query", [meshql, aliases], popup=popup) or []
+            projects = []
+            for project in aqProjects:
+                thumbnail_url = None
+                # FIXME: Prism is not using Aquarium session to download images (request to download image is not authenticated)
+                # if project["thumbnail"]:
+                #     thumbnail_url = urllib.parse.urljoin(self.getCurrentUrl(), project["thumbnail"])
+                project["thumbnail_url"] = thumbnail_url
+                projects.append(project)
+
+            return projects
+
+    @err_catcher(name=__name__)
+    def getCurrentProject(self, parent=None):
+        text = "Querying current project - please wait..."
+        popup = self.core.waitPopup(self.core, text, parent=parent, hidden=True)
+        with popup:
+            if not self.prjMng.ensureLoggedIn():
+                return
+
+            projectKey = self.getCurrentProjectId()
+            if (projectKey):
+                if self.aqProject and self.aqProject._key == projectKey: return self.aqProject
+                else:
+                    return self.getAqProject(projectKey)
+            else:
+                return None
+
+    @err_catcher(name=__name__)
+    def getCurrentProjectId(self):
+        if not self.prjMng.ensureLoggedIn(quiet=True):
+            return
+
+        projectKey = self.core.getConfig("prjManagement", "aquarium_projectKey", config="project")
+        if not projectKey:
+            msg = "No Aquarium project is specified in the project settings."
+            logger.warning(msg)
+            return
+
+        return projectKey
+
+    @err_catcher(name=__name__)
+    def getProjectIdByName(self, name):
+        # REVIEW: Do I need that function ?
+        if not self.prjMng.ensureLoggedIn():
+            return
+
+        projectKey = self.core.getConfig("prjManagement", "aquarium_projectKey", config="project")
+        if projectKey is None:
+            return
+
+        return projectKey
+
+    @err_catcher(name=__name__)
+    def getAssetDepartments(self, allowCache=True):
+        # FIXME: Add Prism cache management
+        text = "Querying asset departments - please wait..."
+        popup = self.core.waitPopup(self.core, text, hidden=True)
+        with popup:
+            departments = []
+            if self.aqProject:
+                aqDepartments = self.aqProject.prism['properties'].get('departments').get('asset')
+                if aqDepartments and len(aqDepartments) > 0:
+                    for department in aqDepartments:
+                        departments.append({
+                            "name": department.get('name'),
+                            "abbreviation": department.get('name'),
+                            "defaultTasks": department.get('tasks')
+                        })
+
+            return departments
+
+    @err_catcher(name=__name__)
+    def getShotDepartments(self, allowCache=True):
+        # FIXME: Add Prism cache management
+        text = "Querying shot departments - please wait..."
+        popup = self.core.waitPopup(self.core, text, hidden=True)
+        with popup:
+            departments = []
+            if self.aqProject:
+                aqDepartments = self.aqProject.prism['properties'].get('departments').get('shot')
+                if aqDepartments and len(aqDepartments) > 0:
+                    for department in aqDepartments:
+                        departments.append({
+                            "name": department.get('name'),
+                            "abbreviation": department.get('name'),
+                            "defaultTasks": department.get('tasks')
+                        })
+
+            return departments
+
+    @err_catcher(name=__name__)
+    def getConnectedEntities(self, entity):
+        # QUESTION: What's a connected entity ?
+        centities = []
+        return centities
+
+    @err_catcher(name=__name__)
+    def setConnectedEntities(self, entities, connectedEntities, add=False, remove=False, setReverse=True):
+        # QUESTION: What's a connected entity ?
+        msg = "Entity connection cannot get set in Prism, if your project in connected to Aquarium.\n\nPlease set the entity connection in Aquarium."
+        result = self.core.popupQuestion(msg, buttons=["Open Aquarium", "Close"], icon=QMessageBox.Warning)
+        if result == "Open Aquarium":
+            self.openInBrowser(entities[0]["type"], entities[0])
+
+        return False
+
+    @err_catcher(name=__name__)
+    def getAssetFolders(self, path=None, parent=None):
+        # QUESTION: How to handle subfolders ?
+        assetFolders = []
+        if path:
+            return assetFolders
+
+        assets = self.getAssets(path=path) or []
+        for asset in assets:
+            cat = os.path.dirname(asset["asset_path"])
+            if cat and cat not in assetFolders:
+                assetFolders.append(cat)
+
+        return assetFolders
+
+    @err_catcher(name=__name__)
+    def getAssets(self, path=None, parent=None):
+        # FIXME: Add Prism cache management
+        text = "Querying assets - please wait..."
+        popup = self.core.waitPopup(self.core, text, parent=parent, hidden=True)
+        with popup:
+            if not self.prjMng.ensureLoggedIn():
+                return
+
+            assets = []
+            aqAssets = self.getAqProjectAssets()
+            for aqAsset in aqAssets:
+                assetData = {
+                    "type": "asset",
+                    "id": aqAsset['item']['_key'],
+                    "asset_path": aqAsset['prismPath'],
+                    "description": aqAsset['item']['data'].get('description'),
+                    "thumbnail_url": baseUrl(self.getCurrentUrl(), aqAsset['item']['data'].get('thumbnail')),
+                }
+                assets.append(assetData)
+
+            self.aqAssets = aqAssets
+            return assets
+
+    @err_catcher(name=__name__)
+    def getAssetId(self, entity, prjId=None):
+        # QUESTION: What's the goal of that function ?
         return
-        aq, aqProject, aqUser = self.connectToAquarium()
-        if (shotName or assetPath):
-            params = "apps/{appName}?itemKeys={itemKey}&mode=editor".format(
-                appName= 'shoteditor' if eType == "Shot" else 'asseteditor',
-                itemKey= ''
-            )
-        elif (aqProject):
-            params = '{projectKey}?app=Home'.format(
-                projectKey = aqProject._key
-            )
-
-        prjmanSite = "https://aquarium.fatfish.app/#/{params}".format(
-            params=params,
-        )
-
-        import webbrowser
-
-        webbrowser.open(prjmanSite)
 
     @err_catcher(name=__name__)
-    def onProjectBrowserClose(self, origin):
-        pass
+    def getShots(self, parent=None):
+        # FIXME: Add Prism cache management
+        text = "Querying shots - please wait..."
+        popup = self.core.waitPopup(self.core, text, parent=parent, hidden=True)
+        with popup:
+            if not self.prjMng.ensureLoggedIn():
+                return
+
+            shots = []
+            aqShots = self.getAqProjectShots()
+            for aqShot in aqShots:
+                assetData = {
+                    "type": "shot",
+                    "id": aqShot['item']['_key'],
+                    "shot": aqShot['item']['data'].get('name', ''),
+                    "sequence": aqShot['sequence'],
+                    "start": aqShot['item']['data'].get('frameIn'),
+                    "end": aqShot['item']['data'].get('frameOut'),
+                    "description": aqShot['item']['data'].get('description'),
+                    "thumbnail_url": baseUrl(self.getCurrentUrl(), aqShot['item']['data'].get('thumbnail')),
+                }
+                shots.append(assetData)
+
+            self.aqShots = aqShots
+            return shots
 
     @err_catcher(name=__name__)
-    def onSetProjectStartup(self, origin):
-        pass
+    def getShotByEntity(self, entity):
+        shots = self.getShots()
+        if shots is None:
+            return
+
+        for shot in shots:
+            if shot["sequence"] == entity["sequence"] and shot["shot"] == entity["shot"]:
+                return shot
+
+        msg = 'Could not find shot "%s" in Aquarium.' % self.core.entities.getShotName(entity)
+        self.core.popup(msg)
+
+    @err_catcher(name=__name__)
+    def getShotId(self, entity, prjId=None):
+        # QUESTION: What's the goal of that function ?
+        return
+
+    @err_catcher(name=__name__)
+    def getTask(self, entity, dep, task, parent=None):
+        tasks = self.getTasksFromEntity(entity)
+        for t in tasks:
+            if dep and t["department"] != dep:
+                continue
+
+            if t["task"] != task:
+                continue
+
+            return t
+
+    @err_catcher(name=__name__)
+    def getDepartmentFromAssetTaskName(self, taskName):
+        department = None
+        departements = [department for department in self.getAssetDepartments() if taskName in department['defaultTasks']]
+        if (len(departements) > 0):
+            department = departements[0]
+        return department
+
+    @err_catcher(name=__name__)
+    def getDepartmentFromShotTaskName(self, taskName):
+        department = None
+        departements = [department for department in self.getShotDepartments() if taskName in department['defaultTasks']]
+        if (len(departements) > 0):
+            department = departements[0]
+        return department
+
+    @err_catcher(name=__name__)
+    def getTasksFromEntity(self, entity, parent=None, allowCache=True):
+        text = "Querying tasks - please wait..."
+        popup = self.core.waitPopup(self.core, text, parent=parent, hidden=True)
+        with popup:
+            tasks = []
+            if (entity["type"] == 'asset'):
+                aqEntities = [aqAsset for aqAsset in self.aqAssets if aqAsset['prismPath'] == entity.get("asset_path", "").replace("\\", "/")]
+                if len(aqEntities) > 0:
+                    aqTasks = aqEntities[0]['tasks']
+                    for aqTask in aqTasks:
+                        department = self.getDepartmentFromAssetTaskName(aqTask["data"]["name"])
+                        if department:
+                            data = {
+                                "department": department['name'],
+                                "task": aqTask["data"]["name"],
+                                "status": aqTask['data'].get('status', ''),
+                                "id": aqTask["_key"],
+                            }
+                            tasks.append(data)
+            elif (entity["type"] == 'shot'):
+                aqEntities = [aqShot for aqShot in self.aqShots if aqShot['sequence'] == entity.get("sequence", "") and aqShot['name'] == entity.get("shot", "")]
+                if len(aqEntities) > 0:
+                    aqTasks = aqEntities[0]['tasks']
+                    for aqTask in aqTasks:
+                        department = self.getDepartmentFromShotTaskName(aqTask["data"]["name"])
+                        if department:
+                            data = {
+                                "department": department['name'],
+                                "task": aqTask["data"]["name"],
+                                "status": aqTask['data'].get('status', ''),
+                                "id": aqTask["_key"],
+                            }
+                            tasks.append(data)
+            return tasks
+
+    @err_catcher(name=__name__)
+    def getTaskId(self, entity, prjId, taskname):
+        # QUESTION: What's the goal of that function ?
+        return
+
+    @err_catcher(name=__name__)
+    def setTaskStatus(self, entity, department, task, status, parent=None):
+        text = "Setting status - please wait..."
+        popup = self.core.waitPopup(self.core, text, parent=parent, hidden=True)
+        with popup:
+            if not self.prjMng.ensureLoggedIn():
+                return
+
+            taskKey = entity['id']
+            if taskKey:
+                aqStatus = self.getAqStatusFromName(status)
+                if (aqStatus):
+                    self.aq.task(taskKey).update_data(data=aqStatus)
+                    self.getTasksFromEntity(entity, parent=parent, allowCache=False)
+                    self.getAssignedTasks(allowCache=False)
+                    return True
+                else:
+                    msg = "Couldn't find matching status in Aquarium. Failed to set status."
+                    self.core.popup(msg)
+                    return False
+            else:
+                msg = "Couldn't find matching task in Aquarium. Failed to set status."
+                self.core.popup(msg)
+                return False
+
+    @err_catcher(name=__name__)
+    def getStatusList(self, allowCache=True):
+        text = "Querying status list - please wait..."
+        popup = self.core.waitPopup(self.core, text, hidden=True)
+        with popup:
+            statuses = []
+            aqStatuses = self.getAqProjectStatuses()
+            for aqStatus in aqStatuses:
+                status = {
+                    "name": aqStatus['status'],
+                    "abbreviation": aqStatus['status'],
+                    "color": hexToRgb(aqStatus['color']),
+                    "products": True,
+                    "media": True,
+                    "tasks": True,
+                }
+                statuses.append(status)
+
+            return statuses
+
+
+    @err_catcher(name=__name__)
+    def getProductVersions(self, entity, parent=None, allowCache=True):
+        # TODO: getProductVersions
+        return []
+
+    @err_catcher(name=__name__)
+    def getProductVersion(self, entity, product, versionName):
+        # TODO: getProductVersion
+        return []
+
+    @err_catcher(name=__name__)
+    def getProductVersionStatus(self, entity, product, versionName):
+        # TODO: getProductVersionStatus
+        return []
+
+    @err_catcher(name=__name__)
+    def setProductVersionStatus(self, entity, product, versionName, status, parent=None):
+        # TODO: setProductVersionStatus
+        return False
+
+    @err_catcher(name=__name__)
+    def publishProduct(self, path, entity, task, version, description="", parent=None, origTask=None):
+        # TODO: publishProduct
+        return
+
+    @err_catcher(name=__name__)
+    def getMediaVersions(self, entity, parent=None, allowCache=True):
+        # TODO: getMediaVersions
+        return
+
+    @err_catcher(name=__name__)
+    def getMediaVersion(self, entity, identifierData, versionName):
+        # TODO: getMediaVersion
+        return []
+
+    @err_catcher(name=__name__)
+    def getMediaVersionStatus(self, entity, identifierData, versionName):
+        # TODO: getMediaVersionStatus
+        return
+
+    @err_catcher(name=__name__)
+    def setMediaVersionStatus(self, entity, identifierData, versionName, status, parent=None):
+        # TODO: setMediaVersionStatus
+        return
+
+    @err_catcher(name=__name__)
+    def publishMedia(self, paths, entity, task, version, description="", uploadPreview=True, parent=None, origTask=None):
+        # TODO: publishMedia
+        return
+
+    @err_catcher(name=__name__)
+    def getNotes(self, entityType, entity, allowCache=True):
+        # TODO: getNotes
+        return
+
+    @err_catcher(name=__name__)
+    def createNote(self, entityType, entity, note, origin):
+        # TODO: createNote
+        return
+
+    @err_catcher(name=__name__)
+    def createReply(self, entityType, entity, parentNote, note, origin):
+        # TODO: createReply
+        return
+
+    @err_catcher(name=__name__)
+    def getAssignedTasks(self, user=None, allowCache=True):
+        # TODO: getAssignedTasks
+        return []
