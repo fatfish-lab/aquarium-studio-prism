@@ -507,10 +507,9 @@ class Prism_Aquarium_Functions(object):
 
     @err_catcher(name=__name__)
     def getAssetFolders(self, path=None, parent=None):
-        # QUESTION: How to handle subfolders ?
         assetFolders = []
         if path:
-            return assetFolders
+            path = path.replace('\\', "/")
 
         assets = self.getAssets(path=path) or []
         for asset in assets:
@@ -530,8 +529,14 @@ class Prism_Aquarium_Functions(object):
                 return
 
             assets = []
+            if path:
+                path = path.replace("\\", "/")
+
             aqAssets = self.getAqProjectAssets()
             for aqAsset in aqAssets:
+                if path and not aqAsset['prismPath'].startswith(path):
+                    continue
+
                 assetData = {
                     "type": "asset",
                     "id": aqAsset['item']['_key'],
@@ -541,7 +546,8 @@ class Prism_Aquarium_Functions(object):
                 }
                 assets.append(assetData)
 
-            self.aqAssets = aqAssets
+            if not path:
+                self.aqAssets = aqAssets
             return assets
 
     @err_catcher(name=__name__)
