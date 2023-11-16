@@ -567,7 +567,7 @@ class Prism_Aquarium_Functions(object):
             shots = []
             aqShots = self.getAqProjectShots()
             for aqShot in aqShots:
-                assetData = {
+                shotData = {
                     "type": "shot",
                     "id": aqShot['item']['_key'],
                     "shot": aqShot['item']['data'].get('name', ''),
@@ -577,7 +577,7 @@ class Prism_Aquarium_Functions(object):
                     "description": aqShot['item']['data'].get('description'),
                     "thumbnail_url": baseUrl(self.getCurrentUrl(), aqShot['item']['data'].get('thumbnail')),
                 }
-                shots.append(assetData)
+                shots.append(shotData)
 
             self.aqShots = aqShots
             return shots
