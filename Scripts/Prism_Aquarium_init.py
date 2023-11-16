@@ -205,10 +205,9 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
         statuses = []
 
         aqStatuses = self.aqProject.traverse(meshql=query)
-
         for aqStatus in aqStatuses:
             if aqStatus:
-                exist = [status for status in statuses if status.status == aqStatuses]
+                exist = [status for status in statuses if status['status'] == aqStatus['status']]
                 if len(exist) == 0:
                     statuses.append(aqStatus)
 

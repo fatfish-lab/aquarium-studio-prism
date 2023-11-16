@@ -36,3 +36,6 @@ def hexToRgb(hex):
         [hashtag, color] = hex.split('#')
         if (color): rgb = list(int(color[i:i+2], 16) for i in (0, 2, 4))
     return rgb
+
+def flatten(listToFlatten):
+    return [item for sublist in listToFlatten for item in sublist]
