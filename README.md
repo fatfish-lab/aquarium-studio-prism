@@ -4,6 +4,9 @@
 
 Aquarium Studio is developed by [Fatfish Lab](https://fatfi.sh).
 
+> [!NOTE]
+> Are you using Prism v2 ? Go [checkout the development of the new compatible version](https://github.com/fatfish-lab/aquarium-studio-prism/tree/prism2).
+
 ## Installation
 This plugin is compatible with v1.3 of Prism.
 
