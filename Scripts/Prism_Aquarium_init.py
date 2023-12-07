@@ -29,6 +29,9 @@ from Prism_Aquarium_Functions import Prism_Aquarium_Functions
 
 from PrismUtils.Decorators import err_catcher_plugin as err_catcher
 
+import logging
+logger = logging.getLogger(__name__)
+
 class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
     def __init__(self, core):
         self.aqAssets = []
