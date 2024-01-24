@@ -34,13 +34,14 @@ logger = logging.getLogger(__name__)
 
 class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
     def __init__(self, core):
-        self.aqAssets = []
-        self.aqShots = []
-        self.aqProjectLocations = []
-
         self.aq = None
         self.aqUser = None
+
+        self.aqShots = None
+        self.aqAssets = None
         self.aqProject = None
+        self.aqStatuses = None
+        self.aqProjectLocations = []
 
         Prism_Aquarium_Variables.__init__(self, core, self)
         Prism_Aquarium_Functions.__init__(self, core, self)
@@ -93,21 +94,30 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
     def getShotsLocation (self, project = None):
         if (project == None): project = self.aqProject
 
-        location = project.prism['shotsLocation']
-        if not location: location = project._key
+        location = None
+        if project:
+            location = project.prism['shotsLocation']
+            if not location: location = project._key
+
         return location
 
     @err_catcher(name=__name__)
     def getAssetsLocation (self, project = None):
         if (project == None): project = self.aqProject
 
-        location = project.prism['assetsLocation']
-        if not location: location = project._key
+        location = None
+        if project:
+            location = project.prism['assetsLocation']
+            if not location: location = project._key
+
         return location
 
     @err_catcher(name=__name__)
     def getAqProjectAssets(self, project = None):
         if (project == None): project = self.aqProject
+
+        if project == None:
+            return []
 
         separator = '_'
         usePrismNamingConvention = False
@@ -149,6 +159,9 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
     @err_catcher(name=__name__)
     def getAqProjectShots(self, project = None):
         if (project == None): project = self.aqProject
+
+        if project == None:
+            return []
 
         usePrismNamingConvention = False
         if ('usePrismNamingConvention' in project.prism['properties']) :
@@ -199,8 +212,8 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
 
     @err_catcher(name=__name__)
     def getAqProjectStatuses (self, project = None):
-        if (project == None): project = self.aqProject
-        if (self.aqProject == None):
+        if project == None: project = self.aqProject
+        if self.aqProject == None:
             return []
 
         query = '# -($Child)> $Properties AND item.data.tasks_status != null VIEW item.data.tasks_status'

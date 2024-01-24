@@ -157,10 +157,13 @@ class Prism_Aquarium_Functions(object):
     @err_catcher(name=__name__)
     def getDefaultStatus(self):
         # TODO: Improve products, media and tasks statuses
+        # FIXME: Set status not working
         statuses = []
-        aqStatuses = self.getAqProjectStatuses()
 
-        for aqStatus in aqStatuses:
+        if (self.aqStatuses == None):
+            self.aqStatuses = self.getAqProjectStatuses()
+
+        for aqStatus in self.aqStatuses:
             status = {
                 "name": aqStatus['status'],
                 "abbreviation": aqStatus['status'],
@@ -179,7 +182,8 @@ class Prism_Aquarium_Functions(object):
         data = [
             {"name": "aquarium_setup", "label": "Setup...", "tooltip": "Opens a setup window to guide you through the process of connecting your Aquarium project to your Prism project.", "type": "QPushButton", "callback": self.prjMng.openSetupDlg},
             {"name": "aquarium_url", "label": "Url", "type": "QLineEdit"},
-            {"name": "aquarium_projectKey", "label": "Project", "type": "QComboBox"},
+            # QUESTION: How to have a combo box with projects in it ?
+            {"name": "aquarium_projectKey", "label": "Project key", "type": "QLineEdit"},
             # {"name": "aquarium_versionPubStatus", "label": "Status of published versions", "type": "QLineEdit", "default": "rev"},
             {"name": "aquarium_showTaskStatus", "label": "Show Task Status", "type": "QCheckBox", "default": True},
             # {"name": "aquarium_showProductStatus", "label": "Show Product Status", "type": "QCheckBox", "default": True},
@@ -309,7 +313,12 @@ class Prism_Aquarium_Functions(object):
 
     @err_catcher(name=__name__)
     def clearDbCache(self):
+        # QUESTION: When changing projects, does this function is called ?
         self.dbCache = {}
+        # self.aqProject = None
+        self.aqShots = None
+        self.aqAssets = None
+        # self.aqStatuses = None
 
     @err_catcher(name=__name__)
     def isLoggedIn(self):
@@ -317,12 +326,12 @@ class Prism_Aquarium_Functions(object):
             return False
 
         try:
-            token = self.aq.token
+            if self.aqUser is None and self.aq.token is not None:
+                self.aqUser = self.aq.me()
         except Exception:
-            return False
+            pass
 
-        loggedIn = bool(token)
-        return loggedIn
+        return bool(self.aqUser)
 
     @err_catcher(name=__name__)
     def login(self, auth=None, quiet=False):
@@ -370,10 +379,13 @@ class Prism_Aquarium_Functions(object):
     def getUsername(self):
         username = None
         if self.aq:
-            user = self.aq.me()
-            if not user:
+            try:
+                user = self.aq.me()
+                if not user:
+                    return
+                username = user.data.name
+            except:
                 return
-            username = user.data.name
 
         return username
 
@@ -383,6 +395,7 @@ class Prism_Aquarium_Functions(object):
         text = "Querying projects - please wait..."
         popup = self.core.waitPopup(self.core, text, parent=parent, hidden=True)
         with popup:
+            # QUESTION: How to ensure project management is logged in ?
             if not self.prjMng.ensureLoggedIn():
                 return
 
@@ -453,7 +466,6 @@ class Prism_Aquarium_Functions(object):
 
     @err_catcher(name=__name__)
     def getAssetDepartments(self, allowCache=True):
-        # FIXME: Add Prism cache management
         text = "Querying asset departments - please wait..."
         popup = self.core.waitPopup(self.core, text, hidden=True)
         with popup:
@@ -472,7 +484,6 @@ class Prism_Aquarium_Functions(object):
 
     @err_catcher(name=__name__)
     def getShotDepartments(self, allowCache=True):
-        # FIXME: Add Prism cache management
         text = "Querying shot departments - please wait..."
         popup = self.core.waitPopup(self.core, text, hidden=True)
         with popup:
@@ -524,6 +535,7 @@ class Prism_Aquarium_Functions(object):
         # FIXME: Add Prism cache management
         text = "Querying assets - please wait..."
         popup = self.core.waitPopup(self.core, text, parent=parent, hidden=True)
+
         with popup:
             if not self.prjMng.ensureLoggedIn():
                 return
@@ -532,7 +544,10 @@ class Prism_Aquarium_Functions(object):
             if path:
                 path = path.replace("\\", "/")
 
-            aqAssets = self.getAqProjectAssets()
+            aqAssets = self.aqAssets
+            if (aqAssets is None):
+                aqAssets = self.getAqProjectAssets()
+
             for aqAsset in aqAssets:
                 if path and not aqAsset['prismPath'].startswith(path):
                     continue
@@ -542,12 +557,14 @@ class Prism_Aquarium_Functions(object):
                     "id": aqAsset['item']['_key'],
                     "asset_path": aqAsset['prismPath'],
                     "description": aqAsset['item']['data'].get('description'),
-                    "thumbnail_url": baseUrl(self.getCurrentUrl(), aqAsset['item']['data'].get('thumbnail')),
+                    "thumbnail_url": None,
+                    # "thumbnail_url": baseUrl(self.getCurrentUrl(), aqAsset['item']['data'].get('thumbnail')),
                 }
                 assets.append(assetData)
 
             if not path:
                 self.aqAssets = aqAssets
+
             return assets
 
     @err_catcher(name=__name__)
@@ -557,7 +574,6 @@ class Prism_Aquarium_Functions(object):
 
     @err_catcher(name=__name__)
     def getShots(self, parent=None):
-        # FIXME: Add Prism cache management
         text = "Querying shots - please wait..."
         popup = self.core.waitPopup(self.core, text, parent=parent, hidden=True)
         with popup:
@@ -565,7 +581,12 @@ class Prism_Aquarium_Functions(object):
                 return
 
             shots = []
-            aqShots = self.getAqProjectShots()
+
+            aqShots = self.aqShots
+            if (aqShots is None):
+                aqShots = self.getAqProjectShots()
+                self.aqShots = aqShots
+
             for aqShot in aqShots:
                 shotData = {
                     "type": "shot",
@@ -575,11 +596,11 @@ class Prism_Aquarium_Functions(object):
                     "start": aqShot['item']['data'].get('frameIn'),
                     "end": aqShot['item']['data'].get('frameOut'),
                     "description": aqShot['item']['data'].get('description'),
-                    "thumbnail_url": baseUrl(self.getCurrentUrl(), aqShot['item']['data'].get('thumbnail')),
+                    "thumbnail_url": None,
+                    # "thumbnail_url": baseUrl(self.getCurrentUrl(), aqShot['item']['data'].get('thumbnail')),
                 }
                 shots.append(shotData)
 
-            self.aqShots = aqShots
             return shots
 
     @err_catcher(name=__name__)
@@ -700,8 +721,10 @@ class Prism_Aquarium_Functions(object):
         popup = self.core.waitPopup(self.core, text, hidden=True)
         with popup:
             statuses = []
-            aqStatuses = self.getAqProjectStatuses()
-            for aqStatus in aqStatuses:
+            if self.aqStatuses is None:
+                self.aqStatuses = self.getAqProjectStatuses()
+
+            for aqStatus in self.aqStatuses:
                 status = {
                     "name": aqStatus['status'],
                     "abbreviation": aqStatus['status'],
@@ -767,6 +790,7 @@ class Prism_Aquarium_Functions(object):
 
     @err_catcher(name=__name__)
     def getNotes(self, entityType, entity, allowCache=True):
+        print(entityType, entity)
         # TODO: getNotes
         return
 
