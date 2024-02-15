@@ -37,6 +37,7 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
         self.aq = None
         self.aqUser = None
 
+        self.aqUsers = None
         self.aqShots = None
         self.aqAssets = None
         self.aqProject = None
@@ -45,6 +46,22 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
 
         Prism_Aquarium_Variables.__init__(self, core, self)
         Prism_Aquarium_Functions.__init__(self, core, self)
+    @err_catcher(name=__name__)
+    def getAqProjects(self):
+        meshql = "# $Project AND (item.data.completion >= 0 OR item.data.completion == null) VIEW $view"
+        aliases = {
+            'view': {
+                '_key': 'item._key',
+                'name': 'item.data.name',
+                "status": 'item.data.status',
+                "start_date": "item.data.startDate",
+                "end_date": "item.data.endDate",
+                "thumbnail": "item.data.thumbnail",
+            }
+        }
+
+        return self.aq.query(meshql=meshql, aliases=aliases)
+
 
     @err_catcher(name=__name__)
     def getAqProject(self, projectKey = None):
@@ -129,11 +146,17 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
         aliases = {
             "view": {
                 "item": "item",
+                "_key": "item._key",
                 "name": "item.data.name",
                 "parent": "path.vertices[-2]",
                 "parentName": "path.vertices[-2].data.name",
                 "parentsName": "path.vertices[*].data.name",
-                "tasks": "# -($Child, 2)> $Task SORT edge.data.weight VIEW item"
+                "tasks": "# -($Child, 2)> $Task SORT edge.data.weight VIEW $taskView"
+            },
+            "taskView": {
+                "_key": "item._key",
+                "data": "item.data",
+                "users": "# -($Assigned)> $User VIEW item",
             }
         }
 
@@ -173,10 +196,16 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
         aliases = {
             "view": {
                 "item": "item",
+                "_key": "item._key",
                 "name": "item.data.name",
                 "parent": "path.vertices[-2]",
                 "parentName": "path.vertices[-2].data.name",
-                "tasks": "# -($Child, 2)> $Task SORT edge.data.weight VIEW item"
+                "tasks": "# -($Child, 2)> $Task SORT edge.data.weight VIEW $taskView"
+            },
+            "taskView": {
+                "_key": "item._key",
+                "data": "item.data",
+                "users": "# -($Assigned)> $User VIEW item",
             }
         }
 
@@ -242,3 +271,11 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
             status = aqStatus[0]
 
         return status
+
+    def findAssetByPath(self, path):
+        find = lambda asset: asset.get('prismPath', '') == path.replace('\\', "/")
+        return next(filter(find, self.aqAssets), None)
+
+    def findShotBySequenceAndName(self, sequence, name):
+        find = lambda shot: shot.get('sequence', '') == sequence and shot.get('name', '') == name
+        return next(filter(find, self.aqShots), None)

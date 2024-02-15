@@ -25,22 +25,24 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
 
-import os
-import sys
 import importlib
 import logging
-import traceback
-from datetime import datetime
+import os
+import sys
 import time
 
+import sys
+if sys.version_info[0] > 2:
+    from urllib.parse import urljoin
+else:
+    from urlparse import urljoin
+
+
+from Prism_Aquarium_Utils import baseUrl, hexToRgb
+from PrismUtils.Decorators import err_catcher_plugin as err_catcher
 from qtpy.QtCore import *
 from qtpy.QtGui import *
 from qtpy.QtWidgets import *
-
-from PrismUtils.Decorators import err_catcher_plugin as err_catcher
-
-from Prism_Aquarium_Utils import baseUrl
-from Prism_Aquarium_Utils import hexToRgb
 
 logger = logging.getLogger(__name__)
 
@@ -115,9 +117,9 @@ class Prism_Aquarium_Functions(object):
     def getRequiredAuthorization(self):
         # QUESTION: How to prompt to the user email + password but store a token
         data = [
-            {"name": "aquarium_token", "label": "Token", "isSecret": True, "type": "QLineEdit"},
-            # {"name": "aquarium_email", "label": "Username", "isSecret": False, "type": "QLineEdit"},
+            # {"name": "aquarium_email", "label": "Email", "isSecret": False, "type": "QLineEdit"},
             # {"name": "aquarium_password", "label": "Password", "isSecret": True, "type": "QLineEdit"},
+            {"name": "aquarium_token", "label": "Use a token instead of email + password", "isSecret": True, "type": "QLineEdit"},
         ]
         return data
 
@@ -134,30 +136,30 @@ class Prism_Aquarium_Functions(object):
 
     @err_catcher(name=__name__)
     def getAllUsernames(self):
-        # TODO: Make it compatible with Aquarium
-        return
-        # prjId = self.getCurrentProjectId()
-        # if prjId is None:
-        #     return
+        projectId = self.getCurrentProjectId()
+        if projectId is None:
+            return
 
-        # filters = [["projects", "is", {"type": "Project", "id": prjId}]]
-        # fields = ["name"]
-        # text = "Querying usernames - please wait..."
-        # popup = self.core.waitPopup(self.core, text, hidden=True)
-        # with popup:
-        #     users = self.makeDbRequest("find", ["HumanUser", filters, fields], popup=popup)
+        if self.aqUsers is None:
 
-        # users = [user["name"] for user in users]
-        # loginName = self.getUsername()
-        # if loginName not in users:
-        #     users.insert(0, loginName)
+            participants = self.aq.project(projectId).get_permissions(includeMembers=True)
+            users = [participant.user for participant in participants if participant.user.type == 'User']
+            members = [participant.members for participant in participants if participant.user.type != 'User']
 
-        # return users
+            findUser = lambda memberKey: [user for user in users if user._key == memberKey]
+            for usergroupMembers in members:
+                for member in usergroupMembers:
+                    existingUser = next(filter(findUser, member._key), None)
+                    if existingUser is None:
+                        users.append(member)
+
+            self.aqUsers = users
+
+        return [user.data.name for user in self.aqUsers]
 
     @err_catcher(name=__name__)
     def getDefaultStatus(self):
         # TODO: Improve products, media and tasks statuses
-        # FIXME: Set status not working
         statuses = []
 
         if (self.aqStatuses == None):
@@ -215,9 +217,27 @@ class Prism_Aquarium_Functions(object):
 
     @err_catcher(name=__name__)
     def openInBrowser(self, entityType, entity):
-        aqSite = self.aq.api_url
-        itemKey = entity['id']
-        url = aqSite + "/#/open/%s" % (itemKey)
+        itemKey = None
+
+        if ('id' in entity):
+            itemKey = entity['id']
+
+        if (itemKey is None):
+            if (entityType == 'asset'):
+                asset = self.findAssetByPath(entity.get('asset_path'))
+                if (asset is not None):
+                    itemKey = asset['_key']
+            elif (entityType == 'shot'):
+                shot = self.findShotBySequenceAndName(entity.get('sequence', ''), entity.get('shot', ''))
+                if (shot is not None):
+                    itemKey = shot['_key']
+
+        if (itemKey is None):
+            msg = "Open in browser cancelled.\nWe can't find this %s on Aquarium" % (entityType)
+            self.core.popup(msg)
+            return
+
+        url = urljoin(self.aq.api_url, '#/open/%s' % itemKey)
         self.core.openWebsite(url)
 
     @err_catcher(name=__name__)
@@ -299,7 +319,6 @@ class Prism_Aquarium_Functions(object):
             result = getattr(self.aq, method)(*args)
         except Exception as e:
             self.requestInProgress = False
-            # traceback.print_stack()
             logger.debug(method)
             logger.debug(args)
             msg = "Could not request Aquarium data:\n\n%s" % e
@@ -329,6 +348,7 @@ class Prism_Aquarium_Functions(object):
             if self.aqUser is None and self.aq.token is not None:
                 self.aqUser = self.aq.me()
         except Exception:
+            self.aq.token = None
             pass
 
         return bool(self.aqUser)
@@ -339,8 +359,9 @@ class Prism_Aquarium_Functions(object):
             auth = self.prjMng.getAuthorization()
 
         url = auth.get("url")
+        # email = auth.get("aquarium_email")
+        # password = auth.get("aquarium_password")
         token = auth.get("aquarium_token")
-        self.core.users.setUserReadOnly(False)
 
         if not url:
             if not quiet:
@@ -359,21 +380,35 @@ class Prism_Aquarium_Functions(object):
             return
 
         url = url.strip("\\/")
-        try:
-            self.aq = self.aq_api.Aquarium(api_url=url, token=token)
-            self.aqProject = self.getCurrentProject()
-        except Exception as e:
-            logger.warning(traceback.format_exc())
-            if not quiet:
-                msg = "Failed to login into Aquarium:\n\n%s" % e
-                self.core.popup(msg)
-                return
+        self.aq = self.aq_api.Aquarium(api_url=url, token=token)
+
+        # if email and password:
+        #     try:
+        #         self.aq.connect(email, password)
+        #         auth.update(dict(
+        #             aquarium_token=self.aq.token,
+        #             aquarium_email=None,
+        #             aquarium_password=None))
+        #         # self.core.setConfig("prjManagement", "aquarium_token", self.aq.token, config="user")
+        #         # self.core.setConfig("prjManagement", "aquarium_email", None, config="user", delete=True)
+        #         # self.core.setConfig("prjManagement", "aquarium_password", None, config="user", delete=True)
+        #     except:
+        #         pass
 
         if self.isLoggedIn():
             logger.debug("logged in into Aquarium")
             self.clearDbCache()
+            self.aqProject = self.getCurrentProject()
             if self.getUseAqUsername():
                 self.prjMng.setLocalUsername()
+        else:
+            self.aq.token = None
+            auth.update(dict(aquarium_token=None))
+            self.core.setConfig("prjManagement", "aquarium_token", None, config="user", delete=True)
+            if not quiet:
+                msg = "Failed to login into Aquarium:\n\nYou are not connected.\n\nPlease go to Settings > User > Project Management to enter your credentials."
+                self.core.popup(msg)
+                return
 
     @err_catcher(name=__name__)
     def getUsername(self):
@@ -391,27 +426,13 @@ class Prism_Aquarium_Functions(object):
 
     @err_catcher(name=__name__)
     def getProjects(self, parent=None):
-        # TODO: Move that Aquarium function
         text = "Querying projects - please wait..."
         popup = self.core.waitPopup(self.core, text, parent=parent, hidden=True)
         with popup:
-            # QUESTION: How to ensure project management is logged in ?
             if not self.prjMng.ensureLoggedIn():
                 return
 
-            meshql = "# $Project AND (item.data.completion >= 0 OR item.data.completion == null) VIEW $view"
-            aliases = {
-                'view': {
-                    '_key': 'item._key',
-                    'name': 'item.data.name',
-                    "status": 'item.data.status',
-                    "start_date": "item.data.startDate",
-                    "end_date": "item.data.endDate",
-                    "thumbnail": "item.data.thumbnail",
-                }
-            }
-
-            aqProjects = self.makeDbRequest("query", [meshql, aliases], popup=popup) or []
+            aqProjects = self.getAqProjects()
             projects = []
             for project in aqProjects:
                 thumbnail_url = None
@@ -454,7 +475,6 @@ class Prism_Aquarium_Functions(object):
 
     @err_catcher(name=__name__)
     def getProjectIdByName(self, name):
-        # REVIEW: Do I need that function ?
         if not self.prjMng.ensureLoggedIn():
             return
 
@@ -532,7 +552,6 @@ class Prism_Aquarium_Functions(object):
 
     @err_catcher(name=__name__)
     def getAssets(self, path=None, parent=None):
-        # FIXME: Add Prism cache management
         text = "Querying assets - please wait..."
         popup = self.core.waitPopup(self.core, text, parent=parent, hidden=True)
 
@@ -653,6 +672,12 @@ class Prism_Aquarium_Functions(object):
     def getTasksFromEntity(self, entity, parent=None, allowCache=True):
         text = "Querying tasks - please wait..."
         popup = self.core.waitPopup(self.core, text, parent=parent, hidden=True)
+
+        if (allowCache == False):
+            self.clearDbCache()
+            self.getAssets()
+            self.getShots()
+
         with popup:
             tasks = []
             if (entity["type"] == 'asset'):
@@ -698,20 +723,27 @@ class Prism_Aquarium_Functions(object):
             if not self.prjMng.ensureLoggedIn():
                 return
 
-            taskKey = entity['id']
+            aqTask = self.getTask(entity, department, task, parent)
+
+            if (aqTask is None):
+                msg = "Couldn't find matching task in Aquarium. Failed to set status."
+                self.core.popup(msg)
+                return False
+
+            taskKey = aqTask['id']
             if taskKey:
                 aqStatus = self.getAqStatusFromName(status)
                 if (aqStatus):
                     self.aq.task(taskKey).update_data(data=aqStatus)
                     self.getTasksFromEntity(entity, parent=parent, allowCache=False)
-                    self.getAssignedTasks(allowCache=False)
+                    self.getAssignedTasks()
                     return True
                 else:
                     msg = "Couldn't find matching status in Aquarium. Failed to set status."
                     self.core.popup(msg)
                     return False
             else:
-                msg = "Couldn't find matching task in Aquarium. Failed to set status."
+                msg = "The task doesn't have any id. Failed to set status."
                 self.core.popup(msg)
                 return False
 
@@ -721,7 +753,7 @@ class Prism_Aquarium_Functions(object):
         popup = self.core.waitPopup(self.core, text, hidden=True)
         with popup:
             statuses = []
-            if self.aqStatuses is None:
+            if self.aqStatuses is None or allowCache == False:
                 self.aqStatuses = self.getAqProjectStatuses()
 
             for aqStatus in self.aqStatuses:
@@ -785,26 +817,248 @@ class Prism_Aquarium_Functions(object):
 
     @err_catcher(name=__name__)
     def publishMedia(self, paths, entity, task, version, description="", uploadPreview=True, parent=None, origTask=None):
-        # TODO: publishMedia
+        text = "Publishing media. Please wait..."
+        popup = self.core.waitPopup(self.core, text, parent=parent)
+        with popup:
+            prjId = self.getCurrentProjectId()
+            if prjId is None:
+                return
+
+            aqEntity = None
+            if entity.get("type") == "asset":
+                aqEntity = self.findAssetByPath(entity.get('asset_path', ''))
+
+            elif entity.get("type") == "shot":
+                aqEntity = self.findShotBySequenceAndName(entity.get('sequence', ''), entity.get('shot', ''))
+
+            else:
+                msg = "Invalid entity."
+                self.core.popup(msg)
+                return
+
+            if not aqEntity:
+                msg = "Publish is canceled. The %s doesn't exist in Aquarium." % entity.get("type")
+                self.core.popup(msg)
+                return
+
+            existingTasks = [t for t in aqEntity.get('tasks', []) if t['data']['name'] == task]
+
+            if len(existingTasks) == 0:
+                if self.getAllowNonExistentTaskPublishes():
+                    self.prjMng.showPublishNonExistentTaskDlg(paths, entity, task, version, description=description, uploadPreview=uploadPreview, parent=parent, mode="media")
+                    return
+                else:
+                    msg = "Publish canceled. The task \"%s\" doesn't exist on %s \"%s\" in Aquarium." % (task, entity.get("type"), aqEntity['name'])
+                    self.core.popup(msg)
+                    return
+
+            for task in existingTasks:
+                cleanupPreview = False
+                previewPath = None
+                mediaName = os.path.basename(paths[0])
+                messageAction = "Creating"
+
+                if uploadPreview:
+                    messageAction = "Uploading"
+                    if len(paths) == 1 and os.path.splitext(paths[0])[1] in [".mp4", ".jpg", ".png"]:
+                        previewPath = paths[0]
+                    else:
+                        previewPath = self.prjMng.createUploadableMedia(paths, popup=popup)
+                        mediaName = os.path.basename(previewPath)
+                        cleanupPreview = True
+
+                castedEntity = self.aq.asset(aqEntity.get('_key', None))
+                mediaData = {
+                    "name": mediaName,
+                    "prism": {
+                        "path": paths[0]
+                    }
+                }
+
+                popup.msg.setText("%s media %s. Please wait..." % (messageAction, mediaData['name']))
+                QApplication.processEvents()
+
+                media = castedEntity.upload_on_task(task['data']['name'], previewPath, mediaData, version, True, description)
+                print(media)
+                if cleanupPreview:
+                    try:
+                        os.remove(previewPath)
+                    except Exception:
+                        pass
+
+                url = urljoin(self.aq.api_url, '#/open/%s' % media.item._key)
+                data = {"url": url, "versionName": version}
+                return data
+
+
         return
 
     @err_catcher(name=__name__)
     def getNotes(self, entityType, entity, allowCache=True):
-        print(entityType, entity)
-        # TODO: getNotes
-        return
+        notes = []
+
+        def generateData(comment, replies=None, replyTo=None):
+            aqComment = self.aq.cast(comment)
+            data = {
+                "id": aqComment._key,
+                "tags": aqComment.data.tags,
+                "content": aqComment.data.content,
+                "date": self.aq.utils.datetime(aqComment.createdAt).timestamp(),
+                "author": aqComment.createdBy.get('data', dict()).get('name', None),
+                "replies": [],
+                "replyTo": replyTo,
+            }
+
+            if replies is not None:
+                data['replies'] = [generateData(reply) for reply in replies['comments']]
+                data['replyTo'] = replies['conversationKey']
+
+            return data
+
+        if entity['id'] is not None:
+            meshql='# -($Child, 3)> 0, 500 $Comment AND path.vertices[-2].type IN ["Task", "Media"] SET $set SORT item.createdAt DESC VIEW $view'
+            aliases = {
+                "set": {
+                    "comment": "item"
+                },
+                "view": {
+                    "item": 'populate(item)',
+                    "replies": 'FIRST(# <($Child)- 0,1 $Conversation VIEW $replies)'
+                },
+                "replies": {
+                    'conversationKey': 'item._key',
+                    'comments': '# -($Child)> 0,500 $Comment AND item._key != comment._key SORT item.createdAt ASC VIEW populate(item)'
+                }
+            }
+            comments = self.aq.item(entity['id']).traverse(meshql, aliases)
+            print(comments)
+
+            for comment in comments:
+                replies = None
+                if comment['replies'] is not None:
+                    replies = comment['replies']
+                data = generateData(comment['item'], replies)
+                notes.append(data)
+
+        return notes
 
     @err_catcher(name=__name__)
     def createNote(self, entityType, entity, note, origin):
-        # TODO: createNote
-        return
+        print(origin)
+        if (entity['id'] is not None):
+            item = self.aq.item(entity['id'])
+            data = {
+                'content': note,
+                'type': 'prism-comment'
+            }
+            aqComment = item.append('Comment', data)
+
+            return {
+                "date": self.aq.utils.datetime(aqComment.item.createdAt).timestamp(),
+                "author": self.getLoginName(),
+                "content": note,
+                "replies": [],
+                "id": aqComment.item._key,
+                "replyTo": None,
+                "tags": aqComment.item.data.tags,
+            }
+
+        return None
 
     @err_catcher(name=__name__)
     def createReply(self, entityType, entity, parentNote, note, origin):
-        # TODO: createReply
+        conversationKey = parentNote.get('replyTo', None)
+
+        if conversationKey is None:
+            aqTask = self.getTask(entity['entity'], entity['department'], entity['task'])
+            if (aqTask is not None):
+                conversation = self.aq.item(aqTask['id']).append('Conversation', {"name": "Reply from: %s" % note[:20]})
+                self.aq.edge.create('Child', conversation.item._key, parentNote['id'])
+                conversationKey = conversation.item._key
+                parentNote['replyTo'] = conversationKey
+
+
+        try:
+            self.aq.edge.create('Assigned', conversationKey, self.aqUser._key)
+        except:
+            pass
+
+        aqConversation = self.aq.item(conversationKey)
+        data = {
+            'content': note,
+            'type': 'prism-comment'
+        }
+        aqComment = aqConversation.append('Comment', data)
+
+        return {
+            "date": self.aq.utils.datetime(aqComment.item.createdAt).timestamp(),
+            "author": self.getLoginName(),
+            "content": note,
+            "replies": [],
+            "id": aqComment.item._key,
+            "replyTo": conversationKey,
+            "tags": aqComment.item.data.tags,
+        }
+
         return
 
     @err_catcher(name=__name__)
     def getAssignedTasks(self, user=None, allowCache=True):
-        # TODO: getAssignedTasks
-        return []
+        def generateTaskData (aqTask, aqEntity):
+            startdate = None
+            if (aqTask['data'].get('startdate', None) is not None):
+                startdate = self.aq.utils.datetime(aqTask['data']['startdate']).timestamp()
+
+            deadline = None
+            if (aqTask['data'].get('deadline', None) is not None):
+                deadline = self.aq.utils.datetime(aqTask['data']['deadline']).timestamp()
+
+            data = {
+                "name": aqTask['data']['name'],
+                "path": aqEntity['prismPath'],
+                "entity": {
+                    "type": aqEntity['item']['type'].lower(),
+                },
+                "status": aqTask['data'].get('status', None),
+                "start_date": startdate,
+                "end_date": deadline,
+                "id": aqTask['_key'],
+            }
+
+            if (aqEntity['item']['type'] == 'Asset'):
+                data['entity']['asset_path'] = aqEntity['prismPath']
+                department = self.getDepartmentFromAssetTaskName(task['data']['name'])
+                if (department is not None):
+                    data['department'] = department['name']
+
+            elif (aqEntity['item']['type'] == 'Shot'):
+                data['entity']['shot'] = aqEntity['name']
+                data['entity']['sequence'] = aqEntity['sequence']
+                department = self.getDepartmentFromShotTaskName(task['data']['name'])
+                if (department is not None):
+                    data['department'] = department['name']
+            return data
+
+        if (allowCache == False):
+            self.clearDbCache()
+            self.getAssets()
+            self.getShots()
+
+        tasks = []
+        if self.aqAssets:
+            for asset in self.aqAssets:
+                for task in asset['tasks']:
+                    for u in task['users']:
+                        if u['data']['name'] == user:
+                            data = generateTaskData(task, asset)
+                            tasks.append(data)
+
+        if self.aqShots:
+            for shot in self.aqShots:
+                for task in shot['tasks']:
+                    for u in task['users']:
+                        if u['data']['name'] == user:
+                            data = generateTaskData(task, shot)
+                            tasks.append(data)
+
+        return tasks
