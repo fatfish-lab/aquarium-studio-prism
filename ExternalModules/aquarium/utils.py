@@ -114,3 +114,18 @@ class Utils():
         """
 
         return datetime.datetime.strptime(date, "%Y-%m-%dT%H:%M:%S.%f%z").strftime(format)
+
+
+    @staticmethod
+    def datetime(date):
+        """
+        Transform the ISO string date into a Python datetime object.
+
+        :param      datetime:   The ISO date string
+        :type       datetime:   string
+
+        :returns:   The datetime object from the date string
+        :rtype:     datetime
+        """
+
+        return datetime.datetime.strptime(date, "%Y-%m-%dT%H:%M:%S.%f%z")

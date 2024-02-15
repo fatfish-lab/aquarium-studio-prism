@@ -8,13 +8,13 @@ class Asset(Item):
     This class describes an Asset object child of Item class.
     """
 
-    def upload_on_task(self, task_name='', path='', data={}, version_name=None, override_media = True, message = None):
+    def upload_on_task(self, task_name='', path=None, data={}, version_name=None, override_media = True, message = None):
         """
         Uploads new media version on asset task
 
         :param      task_name:      The task name
         :type       task_name:      string
-        :param      path:           The media path to upload
+        :param      path:           The media path to upload, optional
         :type       path:           string
         :param      data:           The data you want to upload with the file, optional
         :type       data:           dict
@@ -28,7 +28,12 @@ class Asset(Item):
         :returns:   Updated media object
         :rtype:     dictionary
         """
-        file_dir, file_name = os.path.split(path)
+
+        mediaName = data.get('name', '')
+        if (path is not None):
+            file_dir, file_name = os.path.split(path)
+            if (file_name is not None):
+                mediaName = file_name
         query = "# -($Child, 2)> 0,1 $Task AND item.data.name == '{0}' VIEW $view".format(
             task_name)
 
@@ -64,8 +69,11 @@ class Asset(Item):
                 medias = version.get_children(types='Media')
 
                 if len(medias) > 0:
-                    existing_medias = [media for media in medias if media.item.data.originalname == file_name]
+                    existing_medias = [media for media in medias if media.item.data.originalname == mediaName]
                     if len(existing_medias) > 0:
+                        if path is None:
+                            return existing_medias[0]
+
                         media = existing_medias[0].item
                         return media.upload_file(
                             path=path, data=data, message=message)
