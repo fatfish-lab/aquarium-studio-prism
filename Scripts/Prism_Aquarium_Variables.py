@@ -29,7 +29,7 @@ import os
 
 class Prism_Aquarium_Variables(object):
     def __init__(self, core, plugin):
-        self.version = "v2.0.0-beta.3"
+        self.version = "v2.0.0-beta.4"
         self.pluginName = "Aquarium"
         self.pluginType = "Custom"
         self.platforms = ["Windows"]
