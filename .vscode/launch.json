@@ -8,7 +8,7 @@
             "name": "Start Prism",
             "type": "python",
             "request": "launch",
-            "python": "C:\\Program Files\\Prism2\\Python39\\python.exe",
+            "python": "C:\\Program Files\\Prism2\\Python311\\python.exe",
             "program": "C:\\Program Files\\Prism2\\Scripts\\PrismCore.py",
             "console": "integratedTerminal"
         }
