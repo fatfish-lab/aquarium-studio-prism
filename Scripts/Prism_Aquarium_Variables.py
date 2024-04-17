@@ -11,29 +11,26 @@
 ####################################################
 #
 #
-# Copyright (C) 2016-2020 Richard Frangenberg
+# Copyright (C) 2016-2023 Richard Frangenberg
+# Copyright (C) 2023 Prism Software GmbH
 #
-# Licensed under GNU GPL-3.0-or-later
+# Licensed under proprietary license. See license file in the directory of this plugin for details.
 #
-# This file is part of Prism.
+# This file is part of Prism-Plugin-Aquarium.
+# It's created by Yann Moriaud, from Fatfish Lab
+# Contact support@fatfi.sh for any issue related to this plugin
 #
-# Prism is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# Prism is distributed in the hope that it will be useful,
+# Prism-Plugin-Aquarium is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Prism.  If not, see <https://www.gnu.org/licenses/>.
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+import os
 
 
 class Prism_Aquarium_Variables(object):
     def __init__(self, core, plugin):
-        self.version = "v1.2.3"
-        self.pluginName = "Aquarium Studio"
-        self.pluginType = "ProjectManager"
-        self.platforms = ["Windows", "Linux", "Darwin"]
+        self.version = "v2.0.0-beta.4"
+        self.pluginName = "Aquarium"
+        self.pluginType = "Custom"
+        self.platforms = ["Windows"]
+        self.pluginDirectory = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))

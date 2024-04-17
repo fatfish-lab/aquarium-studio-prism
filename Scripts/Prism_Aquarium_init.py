@@ -11,178 +11,132 @@
 ####################################################
 #
 #
-# Copyright (C) 2016-2020 Richard Frangenberg
+# Copyright (C) 2016-2023 Richard Frangenberg
+# Copyright (C) 2023 Prism Software GmbH
 #
-# Licensed under GNU GPL-3.0-or-later
+# Licensed under proprietary license. See license file in the directory of this plugin for details.
 #
-# This file is part of Prism.
+# This file is part of Prism-Plugin-Aquarium.
+# It's created by Yann Moriaud, from Fatfish Lab
+# Contact support@fatfi.sh for any issue related to this plugin
 #
-# Prism is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# Prism is distributed in the hope that it will be useful,
+# Prism-Plugin-Aquarium is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Prism.  If not, see <https://www.gnu.org/licenses/>.
-
-import os
-import sys
-import logging
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
 from Prism_Aquarium_Variables import Prism_Aquarium_Variables
 from Prism_Aquarium_Functions import Prism_Aquarium_Functions
 
 from PrismUtils.Decorators import err_catcher_plugin as err_catcher
 
+import logging
 logger = logging.getLogger(__name__)
-
-modulePath = os.path.join(os.path.abspath(os.path.dirname(os.path.dirname(__file__))), "external_modules")
-sys.path.append(modulePath)
 
 class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
     def __init__(self, core):
-        self.aqAssets = []
-        self.aqShots = []
-        self.aqProjectLocations = []
-
         self.aq = None
         self.aqUser = None
+
+        self.aqUsers = None
+        self.aqShots = None
+        self.aqAssets = None
         self.aqProject = None
-        
+        self.aqStatuses = None
+        self.aqProjectLocations = []
+
         Prism_Aquarium_Variables.__init__(self, core, self)
         Prism_Aquarium_Functions.__init__(self, core, self)
-   
     @err_catcher(name=__name__)
-    def connectToAquarium(self, email=None, password=None, token=None):
-        import aquarium
+    def getAqProjects(self):
+        meshql = "# $Project AND (item.data.completion >= 0 OR item.data.completion == null) VIEW $view"
+        aliases = {
+            'view': {
+                '_key': 'item._key',
+                'name': 'item.data.name',
+                "status": 'item.data.status',
+                "start_date": "item.data.startDate",
+                "end_date": "item.data.endDate",
+                "thumbnail": "item.data.thumbnail",
+            }
+        }
 
-        connected = False
-        aqSite = self.core.getConfig(
-            "aquarium", "site", configPath=self.core.prismIni
-        )
+        return self.aq.query(meshql=meshql, aliases=aliases)
 
-        if (not token): token = self.core.getConfig("aquarium", "token")
-
-        if (not aqSite):
-            logger.warning("Not all required information for the authentification are configured.\nPlease check the following Aquarium Studio settings :\n{aqSite}".format(
-                aqSite='' if aqSite else '- Site url (in project settings)\n')
-            )
-            return False
-
-        if (self.aq == None): self.aq = aquarium.Aquarium(api_url=aqSite, token=token)
-
-        if (token == None or len(token) == 0) or password != None or (password != None and len(password) > 0):
-            try:
-                if (email and password):
-                    self.aq.connect(email=email, password=password)
-                else:
-                    logger.warning("Not all required information for the authentification are configured.\nPlease check the following Aquarium Studio settings :\n{aqSite}{aqUserEmail}{aqUserPassword}".format(
-                        aqSite='' if aqSite else '- Site url (in project settings)\n',
-                        aqUserEmail='' if email else '- User email (in user settings)\n',
-                        aqUserPassword='' if password else '- User password (in user settings)\n'))
-                    connected = False
-            except Exception as e:
-                self.aq.logout()
-                logger.warning("Could not connect to Aquarium Studio:\n\n%s" % e)
-                connected = False
-
-        connected = self.getAqCurrentUser()
-
-        self.aqProject = self.getAqProject()
-        
-        return connected
-
-    @err_catcher(name=__name__)
-    def getAqCurrentUser(self): 
-        try:
-            me = self.aq.get_current_user()
-            self.aqUser = me
-            return True
-        except Exception as e:
-            logger.warning("Could not get user profile:\n\n%s" % e)
-            return False
 
     @err_catcher(name=__name__)
     def getAqProject(self, projectKey = None):
         aqProject = None
-        if (not projectKey): projectKey = self.core.getConfig(
-                "aquarium", "projectkey", configPath=self.core.prismIni
-            )
+        if (not projectKey): projectKey = self.core.getConfig("prjManagement", "aquarium_projectKey", config="project")
         if (projectKey):
             try:
                 aqProject = self.aq.item(projectKey).get()
                 aqProject.prism = dict(
                     properties=None,
                     assetsLocation=None,
-                    shotsLocation=None,
-                    timelogsLocation=None
+                    shotsLocation=None
                 )
 
-                queryProperties = '# -($Child)> 0,1 $Properties AND item.data.prism != null VIEW item.data.prism'
+                queryProperties = '# -($Child)> 0,1 $Properties AND item.data.prism != null AND item.data.prism.version >= "2.0.0" VIEW item.data.prism'
                 prismProperties = aqProject.traverse(meshql=queryProperties)
                 if (prismProperties and len(prismProperties) > 0): aqProject.prism['properties'] = prismProperties[0]
-                
-                queryLocations = '# -()> * AND edge.type IN ["PrismAssetsLocation", "PrismShotsLocation", "PrismTimelogsLocation"]'
+
+                queryLocations = '# -()> * AND edge.type IN ["PrismAssetsLocation", "PrismShotsLocation"]'
                 locations = aqProject.traverse(meshql=queryLocations)
                 for l in locations:
                     location = self.aq.element(l)
                     if location.edge.type == 'PrismAssetsLocation': aqProject.prism['assetsLocation'] = location.item._key
                     elif location.edge.type == 'PrismShotsLocation': aqProject.prism['shotsLocation'] = location.item._key
-                    elif location.edge.type == 'PrismTimelogsLocation': aqProject.prism['timelogsLocation'] = location.item._key
 
             except Exception as e:
                 logger.warning("Could not access to project:\n\n%s" % e)
 
         return aqProject
 
-    @err_catcher(name=__name__)
-    def getAqProjects(self):
-        aliases = {
-            'view': {
-                'name': 'item.data.name',
-                '_key': 'item._key' 
-            }
-        }
+    # @err_catcher(name=__name__)
+    # def getAqProjects(self):
+    #     aliases = {
+    #         'view': {
+    #             'name': 'item.data.name',
+    #             '_key': 'item._key'
+    #         }
+    #     }
 
-        projects = self.aq.query(
-            meshql="# ($Project AND (item.data.completion >= 0 OR item.data.completion == null) AND NOT (<($Trash)- *)) SORT item.updatedAt DESC VIEW $view",
-            aliases=aliases
-        )
-        return projects
+    #     projectsfun = self.aq.query(
+    #         meshql="# ($Project AND (item.data.completion >= 0 OR item.data.completion == null) AND NOT (<($Trash)- *)) SORT item.updatedAt DESC VIEW $view",
+    #         aliases=aliases
+    #     )
+    #     return projects
 
     @err_catcher(name=__name__)
     def getShotsLocation (self, project = None):
         if (project == None): project = self.aqProject
 
-        location = project.prism['shotsLocation']
-        if not location: location = project._key
+        location = None
+        if project:
+            location = project.prism['shotsLocation']
+            if not location: location = project._key
+
         return location
 
     @err_catcher(name=__name__)
     def getAssetsLocation (self, project = None):
         if (project == None): project = self.aqProject
 
-        location = project.prism['assetsLocation']
-        if not location: location = project._key
-        return location
+        location = None
+        if project:
+            location = project.prism['assetsLocation']
+            if not location: location = project._key
 
-    @err_catcher(name=__name__)
-    def getTimelogsLocation (self, project = None):
-        if (project == None): project = self.aqProject
-
-        location = project.prism['timelogsLocation']
-        if not location: location = project._key
         return location
 
     @err_catcher(name=__name__)
     def getAqProjectAssets(self, project = None):
         if (project == None): project = self.aqProject
 
+        if project == None:
+            return []
+
+        separator = '_'
         usePrismNamingConvention = False
         if ('usePrismNamingConvention' in project.prism['properties']) :
             usePrismNamingConvention = project.prism['properties']['usePrismNamingConvention']
@@ -192,76 +146,167 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
         aliases = {
             "view": {
                 "item": "item",
+                "_key": "item._key",
                 "name": "item.data.name",
+                "thumbnail": "item.data.thumbnail",
                 "parent": "path.vertices[-2]",
                 "parentName": "path.vertices[-2].data.name",
                 "parentsName": "path.vertices[*].data.name",
-                "tasks": "# -($Child, 2)> $Task SORT edge.data.weight VIEW item"
+                "tasks": "# -($Child, 2)> $Task SORT edge.data.weight VIEW $taskView"
+            },
+            "taskView": {
+                "_key": "item._key",
+                "data": "item.data",
+                "users": "# -($Assigned)> $User VIEW item",
             }
         }
 
         if (usePrismNamingConvention) :
             aliases['view']['name'] = "SUBSTITUTE(item.data.name, [ '_',' ','-' ], '{separator}' )".format(
-                separator=self.core.sequenceSeparator
+                separator=separator
             )
             aliases['view']['parentName'] = "SUBSTITUTE(path.vertices[-2].data.name, [ '_',' ','-' ], '{separator}' )".format(
-                separator=self.core.sequenceSeparator
+                separator=separator
             )
             aliases['view']['parentsName'] = "JSON_PARSE(SUBSTITUTE(path.vertices[*].data.name, [ '_',' ','-' ], '{separator}' ))".format(
-                separator=self.core.sequenceSeparator
+                separator=separator
             )
 
         assets = self.aq.item(startpoint).traverse(meshql=query, aliases=aliases)
 
         for asset in assets:
-            prismId = os.path.join(*(asset['parentsName'][1:-1] + [asset['name']]))
-            asset['prismId'] = prismId
-        
+            prismPath = '/'.join(asset['parentsName'][1:-1] + [asset['name']])
+            asset['prismPath'] = prismPath
+
         return assets
 
     @err_catcher(name=__name__)
     def getAqProjectShots(self, project = None):
         if (project == None): project = self.aqProject
 
+        if project == None:
+            return []
+
         usePrismNamingConvention = False
         if ('usePrismNamingConvention' in project.prism['properties']) :
             usePrismNamingConvention = project.prism['properties']['usePrismNamingConvention']
 
+        separator = '_'
         startpoint = self.getShotsLocation(project = project)
         query = "# -($Child, 3)> 0,500 $Shot AND path.edges[*].data.hidden != true VIEW $view"
         aliases = {
             "view": {
                 "item": "item",
+                "_key": "item._key",
                 "name": "item.data.name",
+                "thumbnail": "item.data.thumbnail",
                 "parent": "path.vertices[-2]",
                 "parentName": "path.vertices[-2].data.name",
-                "tasks": "# -($Child, 2)> $Task SORT edge.data.weight VIEW item"
+                "tasks": "# -($Child, 2)> $Task SORT edge.data.weight VIEW $taskView"
+            },
+            "taskView": {
+                "_key": "item._key",
+                "data": "item.data",
+                "users": "# -($Assigned)> $User VIEW item",
             }
         }
 
         if (usePrismNamingConvention):
             aliases["view"]["name"] = "SUBSTITUTE(item.data.name, [ '_',' ','-' ], '{separator}' )".format(
-                separator=self.core.sequenceSeparator
+                separator=separator
             )
             aliases["view"]["parentName"] = "SUBSTITUTE(path.vertices[-2].data.name, [ '_','-','.',' ' ], '{separator}' )".format(
                 separator='.'
             )
 
         shots = self.aq.item(startpoint).traverse(meshql=query, aliases=aliases)
-        
+
         for shot in shots:
             prismId = None
+            sequence = None
             if (shot['parent']['_key'] == startpoint):
                 prismId = "{separator}{shotName}".format(
-                    separator = self.core.sequenceSeparator,
+                    separator = separator,
                     shotName = shot['name']
                 )
             else:
                 prismId = "{parentName}{separator}{shotName}".format(
                     parentName = shot['parentName'],
-                    separator = self.core.sequenceSeparator,
+                    separator = separator,
                     shotName = shot['name']
                 )
+                sequence = shot['parentName']
             shot['prismId'] = prismId
+            shot['sequence'] = sequence
 
         return shots
+
+    @err_catcher(name=__name__)
+    def getAqProjectStatuses (self, project = None):
+        if project == None: project = self.aqProject
+        if self.aqProject == None:
+            return []
+
+        query = '# -($Child)> $Properties AND item.data.tasks_status != null VIEW item.data.tasks_status'
+
+        statuses = []
+
+        aqStatuses = self.aqProject.traverse(meshql=query)
+        for aqStatus in aqStatuses:
+            if aqStatus:
+                exist = [status for status in statuses if status['status'] == aqStatus['status']]
+                if len(exist) == 0:
+                    statuses.append(aqStatus)
+
+        if len(statuses) == 0:
+            statuses = list(self._aq_api.DEFAULT_STATUSES.values())
+
+        return statuses
+
+    @err_catcher(name=__name__)
+    def getAqStatusFromName (self, statusName):
+        status = None
+        aqStatuses = self.getAqProjectStatuses()
+
+        aqStatus = [aqStatus for aqStatus in aqStatuses if aqStatus['status'] == statusName]
+        if len(aqStatus) > 0:
+            status = aqStatus[0]
+
+        return status
+
+
+    @err_catcher(name=__name__)
+    def getAqProjectPlaylists(self, project = None):
+        if (project == None): project = self.aqProject
+
+        if project == None:
+            return []
+
+        query = "# -($Child, 2)> 0,500 $Playlist VIEW $view"
+        aliases = {
+            "view": {
+                "item": "item",
+                "_key": "item._key",
+                "name": "item.data.name",
+                "thumbnail": "item.data.thumbnail",
+                "medias": "# -($Child OR $Playlist)> 0,500 $Media SORT edge.createdAt ASC VIEW $mediaView"
+            },
+            "mediaView": {
+                "_key": "item._key",
+                "data": "item.data",
+                "origin": "FIRST(# <($Origin)- 0,1 * VIEW item)",
+                "comments": "# -($Child)> 0,500 $Comment SORT edge.createdAt ASC VIEW populate(item)"
+            }
+        }
+
+        playlists = self.aq.item(project._key).traverse(meshql=query, aliases=aliases)
+        return playlists
+
+
+    def findAssetByPath(self, path):
+        find = lambda asset: asset.get('prismPath', '') == path.replace('\\', "/")
+        return next(filter(find, self.aqAssets), None)
+
+    def findShotBySequenceAndName(self, sequence, name):
+        find = lambda shot: shot.get('sequence', '') == sequence and shot.get('name', '') == name
+        return next(filter(find, self.aqShots), None)
