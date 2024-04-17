@@ -4,8 +4,9 @@
 
 Aquarium Studio is developed by [Fatfish Lab](https://fatfi.sh).
 
-> [!IMPORTANT]
-> This version of the connector is still under development.
+> [!NOTE]
+> This version of the connector is ready to be used in production. We are still developping it to add new features. Feel free to contribute or [contact us](mailto:support@fatfi.sh) if you have any questions !
+
 
 ## Installation
 This plugin is compatible with v2.x.x of Prism.
