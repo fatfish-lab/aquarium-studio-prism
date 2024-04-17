@@ -148,6 +148,7 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
                 "item": "item",
                 "_key": "item._key",
                 "name": "item.data.name",
+                "thumbnail": "item.data.thumbnail",
                 "parent": "path.vertices[-2]",
                 "parentName": "path.vertices[-2].data.name",
                 "parentsName": "path.vertices[*].data.name",
@@ -198,6 +199,7 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
                 "item": "item",
                 "_key": "item._key",
                 "name": "item.data.name",
+                "thumbnail": "item.data.thumbnail",
                 "parent": "path.vertices[-2]",
                 "parentName": "path.vertices[-2].data.name",
                 "tasks": "# -($Child, 2)> $Task SORT edge.data.weight VIEW $taskView"

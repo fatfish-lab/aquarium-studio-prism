@@ -26,6 +26,7 @@
 
 
 import importlib
+import tempfile
 import logging
 import os
 import sys
@@ -133,6 +134,29 @@ class Prism_Aquarium_Functions(object):
         # QUESTION: What's the goal of that function
         data = self.prjMng.getAuthorization() or {}
         return data.get("aquarium_email")
+
+    @err_catcher(name=__name__)
+    def getThumbnail(self, entity):
+        if entity.get('thumbnail', None) is None:
+            return None
+
+        temp_dir = tempfile.gettempdir()
+
+        thumbnail_url = entity['thumbnail']
+        base_name = os.path.basename(thumbnail_url)
+        name, extension = os.path.splitext(base_name)
+
+        thumbnail_path = os.path.join(temp_dir, 'prism_aquarium', name + extension)
+
+        if os.path.exists(thumbnail_path) == False:
+            thumbnail = self.aq.do_request('GET', entity["thumbnail"], decoding=False)
+
+            os.makedirs(os.path.dirname(thumbnail_path), exist_ok=True)
+            with open(thumbnail_path, 'wb') as f:
+                f.write(thumbnail.content)
+                f.close()
+
+        return self.core.media.getPixmapFromPath(thumbnail_path)
 
     @err_catcher(name=__name__)
     def getAllUsernames(self):
@@ -435,11 +459,6 @@ class Prism_Aquarium_Functions(object):
             aqProjects = self.getAqProjects()
             projects = []
             for project in aqProjects:
-                thumbnail_url = None
-                # FIXME: Prism is not using Aquarium session to download images (request to download image is not authenticated)
-                # if project["thumbnail"]:
-                #     thumbnail_url = urllib.parse.urljoin(self.getCurrentUrl(), project["thumbnail"])
-                project["thumbnail_url"] = thumbnail_url
                 projects.append(project)
 
             return projects
@@ -576,8 +595,7 @@ class Prism_Aquarium_Functions(object):
                     "id": aqAsset['item']['_key'],
                     "asset_path": aqAsset['prismPath'],
                     "description": aqAsset['item']['data'].get('description'),
-                    "thumbnail_url": None,
-                    # "thumbnail_url": baseUrl(self.getCurrentUrl(), aqAsset['item']['data'].get('thumbnail')),
+                    "thumbnail": aqAsset['thumbnail']
                 }
                 assets.append(assetData)
 
@@ -615,8 +633,7 @@ class Prism_Aquarium_Functions(object):
                     "start": aqShot['item']['data'].get('frameIn'),
                     "end": aqShot['item']['data'].get('frameOut'),
                     "description": aqShot['item']['data'].get('description'),
-                    "thumbnail_url": None,
-                    # "thumbnail_url": baseUrl(self.getCurrentUrl(), aqShot['item']['data'].get('thumbnail')),
+                    "thumbnail": aqShot['thumbnail']
                 }
                 shots.append(shotData)
 
