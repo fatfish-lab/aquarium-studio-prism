@@ -116,10 +116,9 @@ class Prism_Aquarium_Functions(object):
 
     @err_catcher(name=__name__)
     def getRequiredAuthorization(self):
-        # QUESTION: How to prompt to the user email + password but store a token
         data = [
-            # {"name": "aquarium_email", "label": "Email", "isSecret": False, "type": "QLineEdit"},
-            # {"name": "aquarium_password", "label": "Password", "isSecret": True, "type": "QLineEdit"},
+            {"name": "aquarium_email", "label": "Email", "isSecret": False, "type": "QLineEdit"},
+            {"name": "aquarium_password", "label": "Password", "isSecret": True, "type": "QLineEdit"},
             {"name": "aquarium_token", "label": "Use a token instead of email + password", "isSecret": True, "type": "QLineEdit"},
         ]
         return data
@@ -383,8 +382,8 @@ class Prism_Aquarium_Functions(object):
             auth = self.prjMng.getAuthorization()
 
         url = auth.get("url")
-        # email = auth.get("aquarium_email")
-        # password = auth.get("aquarium_password")
+        email = auth.get("aquarium_email")
+        password = auth.get("aquarium_password")
         token = auth.get("aquarium_token")
 
         if not url:
@@ -396,28 +395,21 @@ class Prism_Aquarium_Functions(object):
 
             return
 
-        if not token:
+        url = url.strip("\\/")
+        self.aq = self.aq_api.Aquarium(api_url=url, token=token)
+
+        if email and password:
+            try:
+                self.aq.connect(email, password)
+                self.prjMng.setAuthorization({"aquarium_token": self.aq.token, "aquarium_password": None})
+            except:
+                pass
+        elif not token:
             if not quiet:
                 msg = "Your are not connected to Aquarium. Please go to you user settings > Project management and enter your credentials."
                 self.core.popup(msg)
 
             return
-
-        url = url.strip("\\/")
-        self.aq = self.aq_api.Aquarium(api_url=url, token=token)
-
-        # if email and password:
-        #     try:
-        #         self.aq.connect(email, password)
-        #         auth.update(dict(
-        #             aquarium_token=self.aq.token,
-        #             aquarium_email=None,
-        #             aquarium_password=None))
-        #         # self.core.setConfig("prjManagement", "aquarium_token", self.aq.token, config="user")
-        #         # self.core.setConfig("prjManagement", "aquarium_email", None, config="user", delete=True)
-        #         # self.core.setConfig("prjManagement", "aquarium_password", None, config="user", delete=True)
-        #     except:
-        #         pass
 
         if self.isLoggedIn():
             logger.debug("logged in into Aquarium")
@@ -428,7 +420,7 @@ class Prism_Aquarium_Functions(object):
         else:
             self.aq.token = None
             auth.update(dict(aquarium_token=None))
-            self.core.setConfig("prjManagement", "aquarium_token", None, config="user", delete=True)
+            self.prjMng.setAuthorization({"aquarium_token": None, "aquarium_password": None, "aquarium_email": None})
             if not quiet:
                 msg = "Failed to login into Aquarium:\n\nYou are not connected.\n\nPlease go to Settings > User > Project Management to enter your credentials."
                 self.core.popup(msg)
