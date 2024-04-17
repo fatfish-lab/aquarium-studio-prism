@@ -274,6 +274,35 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
 
         return status
 
+
+    @err_catcher(name=__name__)
+    def getAqProjectPlaylists(self, project = None):
+        if (project == None): project = self.aqProject
+
+        if project == None:
+            return []
+
+        query = "# -($Child, 2)> 0,500 $Playlist VIEW $view"
+        aliases = {
+            "view": {
+                "item": "item",
+                "_key": "item._key",
+                "name": "item.data.name",
+                "thumbnail": "item.data.thumbnail",
+                "medias": "# -($Child OR $Playlist)> 0,500 $Media SORT edge.createdAt ASC VIEW $mediaView"
+            },
+            "mediaView": {
+                "_key": "item._key",
+                "data": "item.data",
+                "origin": "FIRST(# <($Origin)- 0,1 * VIEW item)",
+                "comments": "# -($Child)> 0,500 $Comment SORT edge.createdAt ASC VIEW populate(item)"
+            }
+        }
+
+        playlists = self.aq.item(project._key).traverse(meshql=query, aliases=aliases)
+        return playlists
+
+
     def findAssetByPath(self, path):
         find = lambda asset: asset.get('prismPath', '') == path.replace('\\', "/")
         return next(filter(find, self.aqAssets), None)

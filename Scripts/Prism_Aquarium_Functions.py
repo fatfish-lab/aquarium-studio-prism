@@ -216,6 +216,7 @@ class Prism_Aquarium_Functions(object):
             {"name": "aquarium_allowNonExistentTaskPublishes", "label": "Allow publishes from non-existent tasks", "type": "QCheckBox", "default": True},
             {"name": "aquarium_allowLocalTasks", "label": "Allow local tasks", "type": "QCheckBox", "default": False},
             {"name": "aquarium_useUsername", "label": "Use Aquarium usernames", "type": "QCheckBox", "default": True},
+            # {"name": "aquarium_syncPlaylists", "label": "Sync playlists", "type": "QCheckBox", "default": False},
             # {"name": "aquarium_syncDepartments", "label": "Auto Sync Departments", "type": "QCheckBox", "default": False},
             # {"name": "aquarium_syncEntityConnections", "label": "Auto Sync Asset-Shot connections", "type": "QCheckBox", "default": False},
             # {"name": "aquarium_shortDeps", "label": "Use short department names", "type": "QCheckBox", "default": False},
@@ -237,6 +238,11 @@ class Prism_Aquarium_Functions(object):
     @err_catcher(name=__name__)
     def getCurrentUrl(self):
         return self.aq.api_url
+
+
+    @err_catcher(name=__name__)
+    def getSyncPlaylists(self):
+        return self.core.getConfig("prjManagement", "aquarium_syncPlaylists", config="project", dft=False)
 
     @err_catcher(name=__name__)
     def openInBrowser(self, entityType, entity):
@@ -360,6 +366,7 @@ class Prism_Aquarium_Functions(object):
         # self.aqProject = None
         self.aqShots = None
         self.aqAssets = None
+        self.aqPlaylists = None
         # self.aqStatuses = None
 
     @err_catcher(name=__name__)
@@ -953,7 +960,6 @@ class Prism_Aquarium_Functions(object):
 
     @err_catcher(name=__name__)
     def createNote(self, entityType, entity, note, origin):
-        print(origin)
         if (entity['id'] is not None):
             item = self.aq.item(entity['id'])
             data = {
@@ -1071,3 +1077,40 @@ class Prism_Aquarium_Functions(object):
                             tasks.append(data)
 
         return tasks
+
+
+    # @err_catcher(name=__name__)
+    # def getPlaylists(self, allowCache=True, parent=None):
+    #     text = "Querying playlists - please wait..."
+    #     popup = self.core.waitPopup(self.core, text, parent=parent, hidden=True)
+
+    #     with popup:
+    #         if not self.prjMng.ensureLoggedIn():
+    #             return
+
+    #         playlists = []
+    #         aqPlaylists = self.aqPlaylists
+    #         if (aqPlaylists is None or allowCache == False):
+    #             aqPlaylists = self.getAqProjectPlaylists()
+
+    #         for playlist in aqPlaylists:
+    #             playlist = playlist.copy()
+    #             playlist["content"] = self.getContentOfPlaylist(playlist)
+    #             playlists.append(playlist)
+
+    #     return playlists
+
+    # @err_catcher(name=__name__)
+    # def getContentOfPlaylist(self, playlist, allowCache=True):
+    #     # QUESTION: What's data does the playlist need to contains ?
+    #     content = []
+    #     return content
+
+    # @err_catcher(name=__name__)
+    # def createPlaylist(self, playlist):
+    #     prjId = self.getCurrentProjectId()
+    #     if prjId is None:
+    #         return
+
+    #     self.aq.project(prjId).append(type='Playlist', data={"name": playlist["name"]})
+    #     self.getPlaylists(allowCache=False)
