@@ -87,6 +87,9 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
                     if location.edge.type == 'PrismAssetsLocation': aqProject.prism['assetsLocation'] = location.item._key
                     elif location.edge.type == 'PrismShotsLocation': aqProject.prism['shotsLocation'] = location.item._key
 
+                if (aqProject.prism["properties"] == None):
+                    logger.warning("Project %s does not have Prism properties. Please go to project settings in Aquarium > Connector and enable Prism." % aqProject.data.name)
+
             except Exception as e:
                 logger.warning("Could not access to project:\n\n%s" % e)
 
@@ -138,8 +141,10 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
 
         separator = '_'
         usePrismNamingConvention = False
-        if ('usePrismNamingConvention' in project.prism['properties']) :
-            usePrismNamingConvention = project.prism['properties']['usePrismNamingConvention']
+
+        if (project.prism and 'properties' in project.prism and isinstance(project.prism["properties"], dict)):
+            if ('usePrismNamingConvention' in project.prism['properties']) :
+                usePrismNamingConvention = project.prism['properties']['usePrismNamingConvention']
 
         startpoint = self.getAssetsLocation(project = project)
         query = "# -($Child, 3)> 0,500 $Asset AND path.edges[*].data.hidden != true VIEW $view"
@@ -188,8 +193,9 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
             return []
 
         usePrismNamingConvention = False
-        if ('usePrismNamingConvention' in project.prism['properties']) :
-            usePrismNamingConvention = project.prism['properties']['usePrismNamingConvention']
+        if (project.prism and 'properties' in project.prism and isinstance(project.prism["properties"], dict)):
+            if ('usePrismNamingConvention' in project.prism['properties']) :
+                usePrismNamingConvention = project.prism['properties']['usePrismNamingConvention']
 
         separator = '_'
         startpoint = self.getShotsLocation(project = project)

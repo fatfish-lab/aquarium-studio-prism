@@ -508,7 +508,7 @@ class Prism_Aquarium_Functions(object):
         popup = self.core.waitPopup(self.core, text, hidden=True)
         with popup:
             departments = []
-            if self.aqProject:
+            if self.aqProject and 'properties' in self.aqProject.prism:
                 aqDepartments = self.aqProject.prism['properties'].get('departments').get('asset')
                 if aqDepartments and len(aqDepartments) > 0:
                     for department in aqDepartments:
@@ -526,7 +526,7 @@ class Prism_Aquarium_Functions(object):
         popup = self.core.waitPopup(self.core, text, hidden=True)
         with popup:
             departments = []
-            if self.aqProject:
+            if self.aqProject and 'properties' in self.aqProject.prism:
                 aqDepartments = self.aqProject.prism['properties'].get('departments').get('shot')
                 if aqDepartments and len(aqDepartments) > 0:
                     for department in aqDepartments:
