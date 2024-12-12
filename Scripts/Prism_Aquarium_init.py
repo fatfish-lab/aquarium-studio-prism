@@ -316,3 +316,6 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
     def findShotBySequenceAndName(self, sequence, name):
         find = lambda shot: shot.get('sequence', '') == sequence and shot.get('name', '') == name
         return next(filter(find, self.aqShots), None)
+
+    def getPlaylists(self, allowCache=True, parent=None):
+        return []
