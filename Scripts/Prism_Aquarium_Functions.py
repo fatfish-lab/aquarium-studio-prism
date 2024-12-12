@@ -765,6 +765,10 @@ class Prism_Aquarium_Functions(object):
 
     @err_catcher(name=__name__)
     def getStatusList(self, allowCache=True):
+        self.getTaskStatusList(allowCache=allowCache)
+
+    @err_catcher(name=__name__)
+    def getTaskStatusList(self, allowCache=True):
         text = "Querying status list - please wait..."
         popup = self.core.waitPopup(self.core, text, hidden=True)
         with popup:
