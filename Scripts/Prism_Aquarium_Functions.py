@@ -508,7 +508,7 @@ class Prism_Aquarium_Functions(object):
         popup = self.core.waitPopup(self.core, text, hidden=True)
         with popup:
             departments = []
-            if self.aqProject:
+            if self.aqProject and 'properties' in self.aqProject.prism:
                 aqDepartments = self.aqProject.prism['properties'].get('departments').get('asset')
                 if aqDepartments and len(aqDepartments) > 0:
                     for department in aqDepartments:
@@ -526,7 +526,7 @@ class Prism_Aquarium_Functions(object):
         popup = self.core.waitPopup(self.core, text, hidden=True)
         with popup:
             departments = []
-            if self.aqProject:
+            if self.aqProject and 'properties' in self.aqProject.prism:
                 aqDepartments = self.aqProject.prism['properties'].get('departments').get('shot')
                 if aqDepartments and len(aqDepartments) > 0:
                     for department in aqDepartments:
@@ -765,6 +765,10 @@ class Prism_Aquarium_Functions(object):
 
     @err_catcher(name=__name__)
     def getStatusList(self, allowCache=True):
+        self.getTaskStatusList(allowCache=allowCache)
+
+    @err_catcher(name=__name__)
+    def getTaskStatusList(self, allowCache=True):
         text = "Querying status list - please wait..."
         popup = self.core.waitPopup(self.core, text, hidden=True)
         with popup:
@@ -1079,26 +1083,27 @@ class Prism_Aquarium_Functions(object):
         return tasks
 
 
-    # @err_catcher(name=__name__)
-    # def getPlaylists(self, allowCache=True, parent=None):
-    #     text = "Querying playlists - please wait..."
-    #     popup = self.core.waitPopup(self.core, text, parent=parent, hidden=True)
+    @err_catcher(name=__name__)
+    def getPlaylists(self, allowCache=True, parent=None):
+        return []
+        # text = "Querying playlists - please wait..."
+        # popup = self.core.waitPopup(self.core, text, parent=parent, hidden=True)
 
-    #     with popup:
-    #         if not self.prjMng.ensureLoggedIn():
-    #             return
+        # with popup:
+        #     if not self.prjMng.ensureLoggedIn():
+        #         return
 
-    #         playlists = []
-    #         aqPlaylists = self.aqPlaylists
-    #         if (aqPlaylists is None or allowCache == False):
-    #             aqPlaylists = self.getAqProjectPlaylists()
+        #     playlists = []
+        #     aqPlaylists = self.aqPlaylists
+        #     if (aqPlaylists is None or allowCache == False):
+        #         aqPlaylists = self.getAqProjectPlaylists()
 
-    #         for playlist in aqPlaylists:
-    #             playlist = playlist.copy()
-    #             playlist["content"] = self.getContentOfPlaylist(playlist)
-    #             playlists.append(playlist)
+        #     for playlist in aqPlaylists:
+        #         playlist = playlist.copy()
+        #         playlist["content"] = self.getContentOfPlaylist(playlist)
+        #         playlists.append(playlist)
 
-    #     return playlists
+        # return playlists
 
     # @err_catcher(name=__name__)
     # def getContentOfPlaylist(self, playlist, allowCache=True):
