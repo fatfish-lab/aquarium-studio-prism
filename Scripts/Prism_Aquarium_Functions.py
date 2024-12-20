@@ -609,7 +609,31 @@ class Prism_Aquarium_Functions(object):
         return
 
     @err_catcher(name=__name__)
-    def getShots(self, parent=None):
+    def getSequences(self, parent=None, allowCache=True, episode=None):
+        shots = self.getShots(parent=parent, allowCache=allowCache, episode=episode)
+        sequences = []
+        for shot in shots:
+            if "sequence" not in shot:
+                continue
+
+            if shot["sequence"] in [sequence["sequence"] for sequence in sequences if not episode or episode == sequence.get("episode")]:
+                continue
+
+            seqData = {
+                "type": "shot",
+                "sequence": shot["sequence"],
+                "shot": "_sequence",
+            }
+            if episode:
+                seqData["episode"] = episode
+
+            sequences.append(seqData)
+
+        return sequences
+
+    @err_catcher(name=__name__)
+    def getShots(self, parent=None, allowCache=True, episode=None, sequence=None):
+        # TODO: Add episode management
         text = "Querying shots - please wait..."
         popup = self.core.waitPopup(self.core, text, parent=parent, hidden=True)
         with popup:
@@ -634,6 +658,11 @@ class Prism_Aquarium_Functions(object):
                     "description": aqShot['item']['data'].get('description'),
                     "thumbnail": aqShot['thumbnail']
                 }
+
+                # FIXME: Do not file the list of shots, change the query for faster results
+                if (sequence and sequence != shotData["sequence"]):
+                    continue
+
                 shots.append(shotData)
 
             return shots
