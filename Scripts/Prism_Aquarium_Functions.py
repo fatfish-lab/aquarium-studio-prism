@@ -818,6 +818,10 @@ class Prism_Aquarium_Functions(object):
 
             return statuses
 
+    @err_catcher(name=__name__)
+    def getProductStatusList(self):
+        # TODO: getProductStatusList
+        return [] 
 
     @err_catcher(name=__name__)
     def getProductVersions(self, entity, parent=None, allowCache=True):
