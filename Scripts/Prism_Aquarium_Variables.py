@@ -32,5 +32,5 @@ class Prism_Aquarium_Variables(object):
         self.version = "v2.1.1-beta.1"
         self.pluginName = "Aquarium"
         self.pluginType = "Custom"
-        self.platforms = ["Windows"]
+        self.platforms = ["Windows", "Linux", "Darwin"]
         self.pluginDirectory = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
