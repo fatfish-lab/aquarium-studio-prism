@@ -2,7 +2,6 @@
 from . import JSON_CONTENT_TYPE
 from .tools import evaluate, pretty_print_format
 from dotmap import DotMap
-import requests
 import logging
 logger=logging.getLogger(__name__)
 
@@ -57,12 +56,29 @@ class Entity(object):
         return inst
 
     def __str__(self):
-        entity=vars(self).copy()
-        entity.pop('parent', None)
+        entity=vars(self)
         dash = '—' * ((len(self.__class__.__name__)) + 2)
         return '\n\t[%s]\n\t%s\n%s ' % (self.__class__.__name__, dash, pretty_print_format(entity, indent=8))
     def __repr__(self):
         return str(self)
+
+    def to_dict(self):
+        """
+        Convert the instance to a dictionary
+
+        :returns:   The instance as a dictionary
+        :rtype:     dictionary
+        """
+
+        entity=dict()
+        for key, value in vars(self).items():
+            if key=='parent':
+                continue
+            if isinstance(value, DotMap):
+                entity[key]= value.toDict()
+            else:
+                entity[key]=value
+        return entity
 
     @property
     def session(self):
@@ -86,7 +102,7 @@ class Entity(object):
 
         entity_data=data.get('data')
         if entity_data:
-            self.data=DotMap(entity_data)
+            self.data=DotMap(entity_data, _dynamic=(not bool(self.parent.strict_dotmap)))
 
     def do_request(self, *args, **kwargs):
         """

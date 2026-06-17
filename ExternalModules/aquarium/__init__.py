@@ -15,6 +15,13 @@ DEFAULT_STATUSES=dict(
 	done={'status':'DONE', 'color': '#9cde4d', 'valid': True, 'completion': 1},
 	cancelled={'status':'CANCELLED', 'color': '#918F89', 'valid': False, 'completion': 0}
 )
+DEFAULT_TASK_STATUSES=DEFAULT_STATUSES
+DEFAULT_VERSION_STATUSES=dict(
+    approved={'status':'APPROVED', 'color': '#9cde4d', 'valid': True, 'completion': 1.0 },
+    pendingReview={'status':'PENDING REVIEW', 'color': '#15c8f3', 'valid': False, 'completion': 0.9 },
+    rtk={'status':'RTK', 'color': '#f35415', 'valid': False, 'completion': 0.5 },
+    rejected={'status':'REJECTED', 'color': '#918F89', 'valid': False, 'completion': 0.0 }
+)
 
 # Set default logging handler to avoid "No handler found" warnings.
 logging.getLogger(__name__).addHandler(NullHandler())

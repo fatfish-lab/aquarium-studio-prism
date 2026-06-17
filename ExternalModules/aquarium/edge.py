@@ -7,6 +7,15 @@ class Edge(Entity):
     """
     This class describes an Edge object child of Aquarium class.
     """
+    def to_dict(self):
+        """
+        Convert the edge to a dictionary
+
+        :returns:   The edge as a dictionary
+        :rtype:     dictionary
+        """
+
+        return super(Edge, self).to_dict()
 
     def set_data_variables(self, data={}):
         """

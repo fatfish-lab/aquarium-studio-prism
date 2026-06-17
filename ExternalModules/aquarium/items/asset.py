@@ -8,7 +8,7 @@ class Asset(Item):
     This class describes an Asset object child of Item class.
     """
 
-    def upload_on_task(self, task_name='', path=None, data={}, version_name=None, override_media = True, message = None):
+    def upload_on_task(self, task_name='', path=None, data={}, version_name=None, override_media = True, message = None, encoded = False, edge_data=None):
         """
         Uploads new media version on asset task
 
@@ -24,6 +24,10 @@ class Asset(Item):
         :type       override_media: boolean
         :param      message:        The message associated with the upload, optional
         :type       message:        string
+        :param      encoded:  If the video file is already encoded for the web and shouldn't be re-process by the server, optional
+        :type       encoded:  boolean
+        :param      edge_data:    The edge data of the new media item. Use `edge_data.weight: [integer]` to define the order of the media (ascending order: lower value mean first). Try to use high values above 100000 and don't use close values like 100000 and 100001, use 100000 and 110000.
+        :type       edge_data:    dictionary, optional
 
         :returns:   Updated media object
         :rtype:     dictionary
@@ -46,16 +50,16 @@ class Asset(Item):
 
         tasks=self.traverse(meshql=query, aliases=aliases)
         if not tasks or len(tasks) == 0:
-            raise RuntimeError('Could not find request')
+            raise RuntimeError('Could not find task with name "{0}" on item "{1}"'.format(task_name, self._key))
 
         media_key = tasks[0].get('mediaKey')
         task = self.parent.cast(tasks[0]['item'])
 
         if version_name == None:
             if not media_key or override_media == False:
-                return task.append(type='Media', data=data, path=path)
+                return task.append(type='Media', data=data, edge_data=edge_data, path=path, encoded=encoded)
             else:
-                return self.parent.item(media_key).upload_file(path=path, data=data, message=message)
+                return self.parent.item(media_key).upload_file(path=path, data=data, message=message, encoded=encoded)
         else:
             versions = task.get_children(types='Version', names=version_name)
 
@@ -76,13 +80,19 @@ class Asset(Item):
 
                         media = existing_medias[0].item
                         return media.upload_file(
-                            path=path, data=data, message=message)
+                            path=path, data=data, message=message, encoded=encoded)
                     else:
-                        return version.append(type='Media', data=data, path=path)
+                        return version.append(
+                            type="Media", data=data, edge_data=edge_data, path=path, encoded=encoded
+                        )
                 else:
-                    return version.append(type='Media', data=data, path=path)
+                    return version.append(
+                        type="Media", data=data, edge_data=edge_data, path=path, encoded=encoded
+                    )
             else:
-                return version.append(type='Media', data=data, path=path)
+                return version.append(
+                    type="Media", data=data, edge_data=edge_data, path=path, encoded=encoded
+                )
 
 
     def get_tasks(self, task_name='', task_status=''):

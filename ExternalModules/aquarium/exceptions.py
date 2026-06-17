@@ -28,6 +28,8 @@ class RequestError(Error):
 #401
 class AuthentificationError(Error):
     pass
+class TwoFactorAuthenticationError(Error):
+    pass
 #403
 class AutorisationError(Error):
     pass

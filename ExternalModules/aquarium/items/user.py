@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from ..item import Item
-from ..element import Element
+from ..exceptions import TwoFactorAuthenticationError
 import logging
 logger = logging.getLogger(__name__)
 
@@ -22,34 +22,106 @@ class User(Item):
 
     def signin(self, email='', password=''):
         """
-        Sign in a user with it's email and password
+        Sign in a user with its email and password
 
         :param      email:     The email of the user
         :type       email:     string
         :param      password:  The password of the user
         :type       password:  string
+        :returns:   The result of the sign-in attempt. Result depends if the user enabled or not 2FA.
+        :rtype:     dict
 
-        :returns: Dictionary User object
-        :rtype: Dict {user: :class:`~aquarium.items.user.User`}
+        .. note::
+
+            If the user doesn't have any 2FA method enabled, the return will be like::
+
+                {
+                    "status": "ok",
+                    "token": "secret_user_token",
+                    "user": :class:`~aquarium.items.user.User`
+                }
+
+            In case any 2FA method is enabled, the return will be like::
+
+                {
+                    "status": "pending_verification",
+                    "options": ["otp", "webauthn"],  # Depending on the active options
+                    "otp": {
+                        "challenge": "123456",
+                    },
+                    "webauthn": {
+                        "challenge": "123456",
+                        # ...
+                    }
+                }
+
+            In this case, you need to call :func:`~aquarium.items.user.User.verify_otp` to complete the sign-in process.
         """
         logging.debug('Connect user %s', email)
         # Authenticate and retrieve the access token
         payload = dict(email=email, password=password)
         result = self.do_request(
-            'POST', 'signin', data=payload)
+            'POST', 'signin', json=payload)
 
-       # Store authentification information
-        token = result.pop("token")
-        self.parent.token = token
-        result = self.parent.element(result)
+        # Store authentification information
+        if result["status"] == "ok":
+            token = result.pop("token")
+            self.parent.token = token
+            result = self.parent.element(result)
 
         return result
 
-    def connect(self, email='', password=''):
+    def connect(self, email='', password='', otp_code=''):
         """
-        Alias of :func:`~aquarium.items.user.User.signin`
+        Sign in a user with its email, password and OTP code
+
+        :param      email:     The email of the user
+        :type       email:     string
+        :param      password:  The password of the user
+        :type       password:  string
+        :param      otp_code:  The OTP code provided by the user
+        :type       otp_code:  string
+        :returns:   The result of the sign-in attempt.
+        :rtype:     Dict {user: :class:`~aquarium.items.user.User`}
         """
-        return self.signin(email, password)
+        result = self.signin(email, password)
+
+        if result["status"] != "ok":
+            if not "otp" in result["options"]:
+                raise TwoFactorAuthenticationError("Unable to connect user. Connection aborded because user enabled 2FA Webauthn and it's not compatible with this module. Please generate a 'Personal Access Token', or contact our support.")
+
+            if not otp_code:
+                raise TwoFactorAuthenticationError("Unable to connect user. Connection aborded because user enabled 2FA Authenticator, but no OTP code provided. ")
+
+            return self.verify_otp(email=email, challenge=result["otp"]["challenge"], code=otp_code)
+        return result
+
+    def verify_otp(self, email='', challenge='', code=''):
+        """
+        Verify the OTP code for 2FA
+
+        :param      email:     The email of the user
+        :type       email:     string
+        :param      challenge: The challenge received during the signin process
+        :type       challenge: string
+        :param      code:      The OTP code provided by the user
+        :type       code:      string
+
+        :returns: Dictionary User object
+        :rtype: Dict {user: :class:`~aquarium.items.user.User`}
+        """
+        logging.debug('Verify OTP for user %s', email)
+        payload = dict(email=email, challenge=challenge, code=code)
+        result = self.do_request(
+            'POST', 'mfa/otp/validate', json=payload)
+
+        # Store authentification information
+        if result["status"] == "ok":
+            token = result.pop("token")
+            self.parent.token = token
+            result = self.parent.element(result)
+
+        return result
 
     def signout(self):
         """

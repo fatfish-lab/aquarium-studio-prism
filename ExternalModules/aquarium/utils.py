@@ -115,6 +115,29 @@ class Utils():
 
         return datetime.datetime.strptime(date, "%Y-%m-%dT%H:%M:%S.%f%z").strftime(format)
 
+    @staticmethod
+    def date_to_iso(date, format='%Y/%m/%d'):
+        """
+        Format the date to ISO string.
+
+        :param      date:   The date string
+        :type       date:   string
+        :param      format: The date format. Default is '%Y/%m/%d'
+        :type       format: string, optional
+
+        .. tip::
+            Check the [Python documentation](https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes) to customize the format
+
+        :returns:   Formated ISO date string
+        :rtype:     string
+        """
+
+        day = datetime.datetime.strptime(date, format)
+
+        if sys.version_info[0] > 2:
+            return day.isoformat(timespec='milliseconds')
+        else:
+            return day.isoformat()
 
     @staticmethod
     def datetime(date):

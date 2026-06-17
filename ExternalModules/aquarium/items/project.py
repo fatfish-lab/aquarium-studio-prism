@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from ..item import Item
-
+from .. import DEFAULT_STATUSES
 
 class Project(Item):
     """
@@ -64,4 +64,35 @@ class Project(Item):
         }
         result = self.traverse(meshql=query, aliases=aliases)
         result = [self.parent.element(data) for data in result]
+        return result
+
+    def get_properties(self):
+        """
+        Gets all the properties of the project
+
+        :returns:   List of Properties class
+        :rtype:     List of :class:`~aquarium.items.item.Item`
+        """
+
+        query = "# -($Child)> $Properties"
+        result = self.traverse(meshql=query)
+        result = [self.parent.element(data) for data in result]
+        return result
+
+    def get_statuses(self):
+        """
+        Gets the statuses of the project
+
+        :returns:   The statuses
+        :rtype:     dictionary
+        """
+        statuses_dct = dict()
+
+        statuses = self.traverse(meshql="# -($Child)> $Properties AND item.data.tasks_status != null SORT null VIEW item.data.tasks_status")
+        for status in statuses:
+            if status:
+                name = status.get('status')
+                if name not in statuses_dct:
+                    statuses_dct[name] = status
+        result = statuses_dct or DEFAULT_STATUSES
         return result
