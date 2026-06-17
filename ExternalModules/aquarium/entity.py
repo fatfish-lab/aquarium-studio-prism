@@ -56,7 +56,8 @@ class Entity(object):
         return inst
 
     def __str__(self):
-        entity=vars(self)
+        entity=vars(self).copy()
+        entity.pop('parent', None)
         dash = '—' * ((len(self.__class__.__name__)) + 2)
         return '\n\t[%s]\n\t%s\n%s ' % (self.__class__.__name__, dash, pretty_print_format(entity, indent=8))
     def __repr__(self):

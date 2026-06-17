@@ -39,7 +39,7 @@ else:
     from urlparse import urljoin
 
 
-from Prism_Aquarium_Utils import baseUrl, hexToRgb
+from Prism_Aquarium_Utils import baseUrl, getFileFromAq, hexToRgb, getPrismData, getValidationStatus, getEntityFromPlaylistMedia
 from PrismUtils.Decorators import err_catcher_plugin as err_catcher
 from qtpy.QtCore import *
 from qtpy.QtGui import *
@@ -69,6 +69,7 @@ class Prism_Aquarium_Functions(object):
             self.hasTaskAssignment = True
             self.publishVersionNameFromFilename = False
             self.episodeSeparator = "__"
+            self.showAssignedTasksOnly = "enforced" if os.getenv("PRISM_AQUARIUM_SHOW_ASSIGNED_TASKS_ONLY", "0") == "1" else False
             self.register()
 
     # if returns true, the plugin will be loaded by Prism
@@ -92,6 +93,7 @@ class Prism_Aquarium_Functions(object):
 
         self.prjMng.registerManager(self)
         self.core.registerCallback("onProjectCreationSettingsReloaded", self.onProjectCreationSettingsReloaded, plugin=self.plugin)
+        self.core.registerCallback("onProjectBrowserMenuUpdated", self.onProjectBrowserMenuUpdated, plugin=self.plugin)
 
     @err_catcher(name=__name__)
     def unregister(self):
@@ -124,8 +126,13 @@ class Prism_Aquarium_Functions(object):
         return data
 
     @err_catcher(name=__name__)
-    def getIcon(self):
+    def getIconPath(self):
         path = os.path.join(self.pluginDirectory, "Resources", "aquarium.png")
+        return path
+
+    @err_catcher(name=__name__)
+    def getIcon(self):
+        path = self.getIconPath()
         return QPixmap(path)
 
     @err_catcher(name=__name__)
@@ -139,22 +146,7 @@ class Prism_Aquarium_Functions(object):
         if entity.get('thumbnail', None) is None:
             return None
 
-        temp_dir = tempfile.gettempdir()
-
-        thumbnail_url = entity['thumbnail']
-        base_name = os.path.basename(thumbnail_url)
-        name, extension = os.path.splitext(base_name)
-
-        thumbnail_path = os.path.join(temp_dir, 'prism_aquarium', name + extension)
-
-        if os.path.exists(thumbnail_path) == False:
-            thumbnail = self.aq.do_request('GET', entity["thumbnail"], decoding=False)
-
-            os.makedirs(os.path.dirname(thumbnail_path), exist_ok=True)
-            with open(thumbnail_path, 'wb') as f:
-                f.write(thumbnail.content)
-                f.close()
-
+        thumbnail_path = getFileFromAq(entity["thumbnail"], self.aq)
         return self.core.media.getPixmapFromPath(thumbnail_path)
 
     @err_catcher(name=__name__)
@@ -182,20 +174,29 @@ class Prism_Aquarium_Functions(object):
 
     @err_catcher(name=__name__)
     def getDefaultStatus(self):
-        # TODO: Improve products, media and tasks statuses
         statuses = []
 
-        if (self.aqStatuses == None):
-            self.aqStatuses = self.getAqProjectStatuses()
-
-        for aqStatus in self.aqStatuses:
+        for aqStatus in self._aq_api.DEFAULT_TASK_STATUSES.values():
             status = {
                 "name": aqStatus['status'],
                 "abbreviation": aqStatus['status'],
                 "color": hexToRgb(aqStatus['color']),
+                "icon": None,
                 "products": True,
-                "media": True,
+                "media": False,
                 "tasks": True,
+            }
+            statuses.append(status)
+
+        for aqStatus in self._aq_api.DEFAULT_VERSION_STATUSES.values():
+            status = {
+                "name": aqStatus['status'],
+                "abbreviation": aqStatus['status'],
+                "color": hexToRgb(aqStatus['color']),
+                "icon": None,
+                "products": False,
+                "media": True,
+                "tasks": False,
             }
             statuses.append(status)
 
@@ -203,20 +204,21 @@ class Prism_Aquarium_Functions(object):
 
     @err_catcher(name=__name__)
     def getProjectSettings(self):
-        # dftStatus = self.getDefaultStatus()
         data = [
             {"name": "aquarium_setup", "label": "Setup...", "tooltip": "Opens a setup window to guide you through the process of connecting your Aquarium project to your Prism project.", "type": "QPushButton", "callback": self.prjMng.openSetupDlg},
             {"name": "aquarium_url", "label": "Url", "type": "QLineEdit"},
             # QUESTION: How to have a combo box with projects in it ?
             {"name": "aquarium_projectKey", "label": "Project key", "type": "QLineEdit"},
-            # {"name": "aquarium_versionPubStatus", "label": "Status of published versions", "type": "QLineEdit", "default": "rev"},
+            {"name": "aquarium_versionPubStatus", "label": "Status applied on publish", "type": "QLineEdit", "default": "PENDING REVIEW"},
             {"name": "aquarium_showTaskStatus", "label": "Show Task Status", "type": "QCheckBox", "default": True},
-            # {"name": "aquarium_showProductStatus", "label": "Show Product Status", "type": "QCheckBox", "default": True},
-            # {"name": "aquarium_showMediaStatus", "label": "Show Media Status", "type": "QCheckBox", "default": True},
+            {"name": "aquarium_showProductStatus", "label": "Show Product Status", "type": "QCheckBox", "default": True},
+            {"name": "aquarium_showMediaStatus", "label": "Show Media Status", "type": "QCheckBox", "default": True},
+            {"name": "aquarium_enableProductPublishes", "label": "Enable product publishes", "type": "QCheckBox", "default": True},
+            {"name": "aquarium_enableMediaPublishes", "label": "Enable media publishes", "type": "QCheckBox", "default": True},
             {"name": "aquarium_allowNonExistentTaskPublishes", "label": "Allow publishes from non-existent tasks", "type": "QCheckBox", "default": True},
             {"name": "aquarium_allowLocalTasks", "label": "Allow local tasks", "type": "QCheckBox", "default": False},
             {"name": "aquarium_useUsername", "label": "Use Aquarium usernames", "type": "QCheckBox", "default": True},
-            # {"name": "aquarium_syncPlaylists", "label": "Sync playlists", "type": "QCheckBox", "default": False},
+            {"name": "aquarium_syncPlaylists", "label": "Sync playlists", "type": "QCheckBox", "default": False},
             # {"name": "aquarium_syncDepartments", "label": "Auto Sync Departments", "type": "QCheckBox", "default": False},
             # {"name": "aquarium_syncEntityConnections", "label": "Auto Sync Asset-Shot connections", "type": "QCheckBox", "default": False},
             # {"name": "aquarium_shortDeps", "label": "Use short department names", "type": "QCheckBox", "default": False},
@@ -245,6 +247,35 @@ class Prism_Aquarium_Functions(object):
         return self.core.getConfig("prjManagement", "aquarium_syncPlaylists", config="project", dft=False)
 
     @err_catcher(name=__name__)
+    def onProjectBrowserMenuUpdated(self, origin, menu):
+        if self.showAssignedTasksOnly == "enforced":
+            return
+
+        act_assigned = QAction("Show only assigned tasks", origin)
+        act_assigned.setCheckable(True)
+        act_assigned.setChecked(self.showAssignedTasksOnly)
+        act_assigned.toggled.connect(self.onShowAssignedTasksToggled)
+        menu.addAction(act_assigned)
+
+    @err_catcher(name=__name__)
+    def onShowAssignedTasksToggled(self, status):
+        self.showAssignedTasksOnly = status
+        if self.core.pb:
+            self.core.pb.refreshUI()
+
+    @err_catcher(name=__name__)
+    def enableProductPublishes(self):
+        return self.core.getConfig("prjManagement", "aquarium_enableProductPublishes", config="project", dft=True)
+
+    @err_catcher(name=__name__)
+    def enableMediaPublishes(self):
+        return self.core.getConfig("prjManagement", "aquarium_enableMediaPublishes", config="project", dft=True)
+
+    @err_catcher(name=__name__)
+    def getVersionPubStatus(self):
+        return self.core.getConfig("prjManagement", "aquarium_versionPubStatus", config="project", dft="PENDING REVIEW")
+
+    @err_catcher(name=__name__)
     def openInBrowser(self, entityType, entity):
         itemKey = None
 
@@ -260,13 +291,19 @@ class Prism_Aquarium_Functions(object):
                 shot = self.findShotBySequenceAndName(entity.get('sequence', ''), entity.get('shot', ''))
                 if (shot is not None):
                     itemKey = shot['_key']
+            # elif entityType in ['productVersion', 'mediaVersion']:
+            #     itemKey = entity.get('id')
+            # elif entityType == 'playlist':
+            #     itemKey = entity.get('id')
+            # elif entityType == 'task':
+            #     itemKey = entity.get('id')
 
         if (itemKey is None):
             msg = "Open in browser cancelled.\nWe can't find this %s on Aquarium" % (entityType)
             self.core.popup(msg)
             return
 
-        url = urljoin(self.aq.api_url, '#/open/%s' % itemKey)
+        url = urljoin(self.aq.api_url, 'open/%s' % itemKey)
         self.core.openWebsite(url)
 
     @err_catcher(name=__name__)
@@ -315,7 +352,7 @@ class Prism_Aquarium_Functions(object):
         return self.core.getConfig("prjManagement", "aquarium_shortDeps", config="project", dft=False)
 
     @err_catcher(name=__name__)
-    def makeDbRequest(self, method, args=None, popup=None, allowCache=True):
+    def makeDbRequest(self, method, args=None, popup=None, allowCache=True, quiet=False):
         # FIXME: Improve function based on Aquarium requirements
         if not isinstance(args, list):
             if args:
@@ -367,7 +404,7 @@ class Prism_Aquarium_Functions(object):
         self.aqShots = None
         self.aqAssets = None
         self.aqPlaylists = None
-        # self.aqStatuses = None
+        # self.aqTaskStatuses = None
 
     @err_catcher(name=__name__)
     def isLoggedIn(self):
@@ -434,7 +471,7 @@ class Prism_Aquarium_Functions(object):
                 return
 
     @err_catcher(name=__name__)
-    def getUsername(self):
+    def getUsername(self, quiet=False):
         username = None
         if self.aq:
             try:
@@ -458,6 +495,7 @@ class Prism_Aquarium_Functions(object):
             aqProjects = self.getAqProjects()
             projects = []
             for project in aqProjects:
+                # FIXME: Add thumbnail handling
                 projects.append(project)
 
             return projects
@@ -569,7 +607,7 @@ class Prism_Aquarium_Functions(object):
         return assetFolders
 
     @err_catcher(name=__name__)
-    def getAssets(self, path=None, parent=None):
+    def getAssets(self, path=None, parent=None, allowCache=True, includeOmitted=False):
         text = "Querying assets - please wait..."
         popup = self.core.waitPopup(self.core, text, parent=parent, hidden=True)
 
@@ -582,8 +620,19 @@ class Prism_Aquarium_Functions(object):
                 path = path.replace("\\", "/")
 
             aqAssets = self.aqAssets
-            if (aqAssets is None):
+            if (aqAssets is None or allowCache is False):
                 aqAssets = self.getAqProjectAssets()
+
+            if self.showAssignedTasksOnly:
+                user_key = self.aqUser._key
+                aqAssets = [
+                    asset for asset in aqAssets
+                    if any(
+                        user.get("_key") == user_key
+                        for task in asset.get("tasks", [])
+                        for user in task.get("users", [])
+                    )
+                ]
 
             for aqAsset in aqAssets:
                 if path and not aqAsset['prismPath'].startswith(path):
@@ -603,14 +652,14 @@ class Prism_Aquarium_Functions(object):
 
             return assets
 
-    @err_catcher(name=__name__)
-    def getAssetId(self, entity, prjId=None):
-        # QUESTION: What's the goal of that function ?
-        return
+    # @err_catcher(name=__name__)
+    # def getAssetId(self, entity, prjId=None, popup=None):
+    #     # QUESTION: What's the goal of that function ?
+    #     return
 
     @err_catcher(name=__name__)
-    def getSequences(self, parent=None, allowCache=True, episode=None):
-        shots = self.getShots(parent=parent, allowCache=allowCache, episode=episode)
+    def getSequences(self, parent=None, allowCache=True, episode=None, includeOmitted=False):
+        shots = self.getShots(parent=parent, allowCache=allowCache, episode=episode, includeOmitted=includeOmitted)
         sequences = []
         for shot in shots:
             if "sequence" not in shot:
@@ -632,7 +681,7 @@ class Prism_Aquarium_Functions(object):
         return sequences
 
     @err_catcher(name=__name__)
-    def getShots(self, parent=None, allowCache=True, episode=None, sequence=None):
+    def getShots(self, parent=None, allowCache=True, episode=None, sequence=None, includeOmitted=False):
         # TODO: Add episode management
         text = "Querying shots - please wait..."
         popup = self.core.waitPopup(self.core, text, parent=parent, hidden=True)
@@ -646,6 +695,17 @@ class Prism_Aquarium_Functions(object):
             if (aqShots is None):
                 aqShots = self.getAqProjectShots()
                 self.aqShots = aqShots
+
+            if self.showAssignedTasksOnly:
+                user_key = self.aqUser._key
+                aqShots = [
+                    shot for shot in aqShots
+                    if any(
+                        user.get("_key") == user_key
+                        for task in shot.get("tasks", [])
+                        for user in task.get("users", [])
+                    )
+                ]
 
             for aqShot in aqShots:
                 shotData = {
@@ -668,7 +728,7 @@ class Prism_Aquarium_Functions(object):
             return shots
 
     @err_catcher(name=__name__)
-    def getShotByEntity(self, entity):
+    def getShotByEntity(self, entity, quiet=False):
         shots = self.getShots()
         if shots is None:
             return
@@ -714,7 +774,7 @@ class Prism_Aquarium_Functions(object):
         return department
 
     @err_catcher(name=__name__)
-    def getTasksFromEntity(self, entity, parent=None, allowCache=True):
+    def getTasksFromEntity(self, entity, parent=None, allowCache=True, quiet=False):
         text = "Querying tasks - please wait..."
         popup = self.core.waitPopup(self.core, text, parent=parent, hidden=True)
 
@@ -725,10 +785,21 @@ class Prism_Aquarium_Functions(object):
 
         with popup:
             tasks = []
+            user_key = self.aqUser._key
+
             if (entity["type"] == 'asset'):
                 aqEntities = [aqAsset for aqAsset in self.aqAssets if aqAsset['prismPath'] == entity.get("asset_path", "").replace("\\", "/")]
                 if len(aqEntities) > 0:
                     aqTasks = aqEntities[0]['tasks']
+
+                    if self.showAssignedTasksOnly:
+                        aqTasks = [
+                            task for task in aqTasks
+                            if any(
+                                user.get("_key") == user_key
+                                for user in task.get("users", [])
+                            )
+                        ]
                     for aqTask in aqTasks:
                         department = self.getDepartmentFromAssetTaskName(aqTask["data"]["name"])
                         if department:
@@ -743,6 +814,14 @@ class Prism_Aquarium_Functions(object):
                 aqEntities = [aqShot for aqShot in self.aqShots if aqShot['sequence'] == entity.get("sequence", "") and aqShot['name'] == entity.get("shot", "")]
                 if len(aqEntities) > 0:
                     aqTasks = aqEntities[0]['tasks']
+                    if self.showAssignedTasksOnly:
+                        aqTasks = [
+                            task for task in aqTasks
+                            if any(
+                                user.get("_key") == user_key
+                                for user in task.get("users", [])
+                            )
+                        ]
                     for aqTask in aqTasks:
                         department = self.getDepartmentFromShotTaskName(aqTask["data"]["name"])
                         if department:
@@ -781,7 +860,7 @@ class Prism_Aquarium_Functions(object):
                 if (aqStatus):
                     self.aq.task(taskKey).update_data(data=aqStatus)
                     self.getTasksFromEntity(entity, parent=parent, allowCache=False)
-                    self.getAssignedTasks()
+                    # self.getAssignedTasks()
                     return True
                 else:
                     msg = "Couldn't find matching status in Aquarium. Failed to set status."
@@ -793,83 +872,287 @@ class Prism_Aquarium_Functions(object):
                 return False
 
     @err_catcher(name=__name__)
-    def getStatusList(self, allowCache=True):
-        self.getTaskStatusList(allowCache=allowCache)
+    def _formatProductVersions(self, entity, aqVersions):
+        versionData = []
+        for aqVersion in aqVersions:
+            versionData.append({
+                "product": aqVersion["taskName"],
+                "version": aqVersion["versionName"],
+                "status": getValidationStatus(aqVersion.get("data")),
+                "id": aqVersion["mediaKey"],
+                "taskId": aqVersion["taskKey"],
+                "versionKey": aqVersion["versionKey"],
+                "aqMedia": aqVersion,
+            })
+        return versionData
 
     @err_catcher(name=__name__)
-    def getTaskStatusList(self, allowCache=True):
-        text = "Querying status list - please wait..."
-        popup = self.core.waitPopup(self.core, text, hidden=True)
-        with popup:
-            statuses = []
-            if self.aqStatuses is None or allowCache == False:
-                self.aqStatuses = self.getAqProjectStatuses()
+    def _formatMediaVersions(self, entity, aqVersions):
+        versionData = []
+        for aqVersion in aqVersions:
+            prismData = getPrismData(aqVersion.get("data"))
+            versionData.append({
+                "identifier": prismData.get("identifier") or aqVersion["taskName"],
+                "version": aqVersion["versionName"],
+                "status": getValidationStatus(aqVersion.get("data")),
+                "id": aqVersion["mediaKey"],
+                "taskId": aqVersion["taskKey"],
+                "versionKey": aqVersion["versionKey"],
+                "aqTaskName": aqVersion["taskName"],
+                "aqMedia": aqVersion,
+            })
+        return versionData
 
-            for aqStatus in self.aqStatuses:
-                status = {
-                    "name": aqStatus['status'],
-                    "abbreviation": aqStatus['status'],
-                    "color": hexToRgb(aqStatus['color']),
-                    "products": True,
-                    "media": True,
-                    "tasks": True,
-                }
-                statuses.append(status)
+    @err_catcher(name=__name__)
+    def _setVersionValidationStatus(self, mediaKey, status, parent=None):
+        mediaItem = self.aq.item(mediaKey)
+        mediaItem.get()
+        prismData = getPrismData(mediaItem.data)
+        prismData["validation_status"] = status
+        result = mediaItem.update_data(data={"prism": prismData})
+        return bool(result)
 
-            return statuses
+
+
+    @err_catcher(name=__name__)
+    def getStatusList(self):
+        return self.getTaskStatusList() + self.getProductStatusList()
+
+    @err_catcher(name=__name__)
+    def getTaskStatusList(self):
+        statuses = []
+        if self.aqTaskStatuses is None:
+            self.aqTaskStatuses = self.getAqProjectStatuses()
+
+        for aqStatus in self.aqTaskStatuses:
+            status = {
+                "name": aqStatus['status'],
+                "abbreviation": aqStatus['status'],
+                "color": hexToRgb(aqStatus['color']),
+                "icon": None,
+                "products": True,
+                "media": False,
+                "tasks": True,
+            }
+            statuses.append(status)
+
+        return statuses
 
     @err_catcher(name=__name__)
     def getProductStatusList(self):
-        # TODO: getProductStatusList
-        return [] 
+        return self.getTaskStatusList()
+
+    @err_catcher(name=__name__)
+    def getMediaStatusList(self):
+        statuses = []
+        if self.aqVersionStatuses is None:
+            self.aqVersionStatuses = self.getAqProjectStatuses("versions_status")
+
+        for aqStatus in self.aqVersionStatuses:
+            status = {
+                "name": aqStatus['status'],
+                "abbreviation": aqStatus['status'],
+                "color": hexToRgb(aqStatus['color']),
+                "icon": None,
+                "media": True,
+                "tasks": False,
+                "products": False,
+            }
+            statuses.append(status)
+
+        return statuses
 
     @err_catcher(name=__name__)
     def getProductVersions(self, entity, parent=None, allowCache=True):
-        # TODO: getProductVersions
-        return []
+        text = "Querying product versions - please wait..."
+        popup = self.core.waitPopup(self.core, text, parent=parent, hidden=True)
+        with popup:
+            if not self.prjMng.ensureLoggedIn():
+                return []
+
+            aqEntity = self.resolveAqEntity(entity)
+            if not aqEntity:
+                return []
+
+            aqVersions = self.getAqTaskVersions(aqEntity["_key"], prismType="product")
+            return self._formatProductVersions(entity, aqVersions)
 
     @err_catcher(name=__name__)
     def getProductVersion(self, entity, product, versionName):
-        # TODO: getProductVersion
-        return []
+        versions = self.getProductVersions(entity) or []
+        for version in versions:
+            if version.get("product") != product:
+                continue
+            if version["version"] == versionName:
+                return version
 
     @err_catcher(name=__name__)
     def getProductVersionStatus(self, entity, product, versionName):
-        # TODO: getProductVersionStatus
-        return []
+        version = self.getProductVersion(entity, product, versionName)
+        if version:
+            return version["status"]
 
     @err_catcher(name=__name__)
     def setProductVersionStatus(self, entity, product, versionName, status, parent=None):
-        # TODO: setProductVersionStatus
-        return False
+        text = "Setting product status - please wait..."
+        popup = self.core.waitPopup(self.core, text, parent=parent, hidden=True)
+        with popup:
+            version = self.getProductVersion(entity, product, versionName)
+            if not version:
+                msg = "Couldn't find matching product version in Aquarium. Failed to set status."
+                self.core.popup(msg)
+                return False
+
+            if self._setVersionValidationStatus(version["id"], status, parent=parent):
+                self.getProductVersions(entity, parent=parent, allowCache=False)
+                return True
+
+            msg = "Couldn't set product status. Make sure you have the required permissions in Aquarium."
+            self.core.popup(msg)
+            return False
 
     @err_catcher(name=__name__)
-    def publishProduct(self, path, entity, task, version, description="", parent=None, origTask=None):
-        # TODO: publishProduct
-        return
+    def publishProduct(self, path, entity, task, version, description="", preview=None, parent=None, origTask=None):
+        text = "Publishing product. Please wait..."
+        popup = self.core.waitPopup(self.core, text, parent=parent)
+        with popup:
+            prjId = self.getCurrentProjectId()
+            if prjId is None:
+                return
+
+            aqEntity = self.resolveAqEntity(entity)
+            if not aqEntity:
+                msg = "Publish is canceled. The %s doesn't exist in Aquarium." % entity.get("type")
+                self.core.popup(msg)
+                return
+
+            existingTasks = [t for t in aqEntity.get("tasks", []) if t["data"]["name"] == task]
+            if len(existingTasks) == 0:
+                if self.getAllowNonExistentTaskPublishes():
+                    self.prjMng.showPublishNonExistentTaskDlg(path, entity, task, version, description=description, preview=preview, parent=parent, mode="product")
+                    return
+                msg = "Publish canceled. The task \"%s\" doesn't exist on %s \"%s\" in Aquarium." % (task, entity.get("type"), aqEntity.get("name", ""))
+                self.core.popup(msg)
+                return
+
+            # versionLabel = self.buildPrismVersionLabel(entity, task, version, origTask=origTask)
+            taskLabel = origTask or task
+            versionLabel = "%s_%s_%s" % (
+                aqEntity.get("name", ""),
+                taskLabel,
+                version,
+            )
+
+            productData = {
+                "name": versionLabel,
+                "prism": {
+                    "type": "product",
+                    "path": path.replace("\\", "/"),
+                    "identifier": origTask or task,
+                    "version": version,
+                    "label": versionLabel
+                },
+            }
+            if description:
+                productData["description"] = description
+
+            castedEntity = self.aq.asset(aqEntity.get("_key", None))
+
+            previewPath = None
+            if preview:
+                previewPath = self.core.getTempFilepath(filename=productData["name"])
+                productData["name"] = os.path.basename(previewPath)
+                self.core.media.savePixmap(preview, previewPath)
+
+                popup.msg.setText("Uploading product preview. Please wait...")
+                QApplication.processEvents()
+
+            result = castedEntity.upload_on_task(
+                task,
+                previewPath,
+                productData,
+                version,
+                True,
+                description or versionLabel,
+            )
+
+            if (previewPath):
+                try:
+                    os.remove(previewPath)
+                except Exception:
+                    pass
+
+            pubStatus = self.getVersionPubStatus()
+            if pubStatus:
+                department = None
+                if entity.get("type") == "asset":
+                    department = self.getDepartmentFromAssetTaskName(task)
+                elif entity.get("type") == "shot":
+                    department = self.getDepartmentFromShotTaskName(task)
+                if department:
+                    self.setTaskStatus(entity, department["name"], task, pubStatus, parent=parent)
+
+            # if result:
+            #     self.getProductVersions(entity, parent=parent, allowCache=False)
+
+            mediaKey = getattr(getattr(result, "item", None), "_key", None)
+            if mediaKey is None and isinstance(result, dict):
+                mediaKey = result.get("item", {}).get("_key")
+
+            url = urljoin(self.aq.api_url, "open/%s" % (mediaKey or aqEntity["_key"]))
+            return {"url": url, "versionName": versionLabel}
 
     @err_catcher(name=__name__)
     def getMediaVersions(self, entity, parent=None, allowCache=True):
-        # TODO: getMediaVersions
-        return
+        text = "Querying media versions - please wait..."
+        popup = self.core.waitPopup(self.core, text, parent=parent, hidden=True)
+        with popup:
+            if not self.prjMng.ensureLoggedIn():
+                return []
+
+            aqEntity = self.resolveAqEntity(entity)
+            if not aqEntity:
+                return []
+
+            aqVersions = self.getAqTaskVersions(aqEntity["_key"], prismType="media")
+            return self._formatMediaVersions(entity, aqVersions)
 
     @err_catcher(name=__name__)
     def getMediaVersion(self, entity, identifierData, versionName):
-        # TODO: getMediaVersion
-        return []
+        versions = self.getMediaVersions(entity) or []
+        for version in versions:
+            if version.get("identifier") != identifierData.get("identifier"):
+                continue
+            if version["version"] == versionName:
+                return version
 
     @err_catcher(name=__name__)
     def getMediaVersionStatus(self, entity, identifierData, versionName):
-        # TODO: getMediaVersionStatus
-        return
+        version = self.getMediaVersion(entity, identifierData, versionName)
+        if version:
+            return version["status"]
 
     @err_catcher(name=__name__)
     def setMediaVersionStatus(self, entity, identifierData, versionName, status, parent=None):
-        # TODO: setMediaVersionStatus
-        return
+        text = "Setting media status - please wait..."
+        popup = self.core.waitPopup(self.core, text, parent=parent, hidden=True)
+        with popup:
+            version = self.getMediaVersion(entity, identifierData, versionName)
+            if not version:
+                msg = "Couldn't find matching media version in Aquarium. Failed to set status."
+                self.core.popup(msg)
+                return False
+
+            if self._setVersionValidationStatus(version["id"], status, parent=parent):
+                self.getMediaVersions(entity, parent=parent, allowCache=False)
+                return True
+
+            msg = "Couldn't set media status. Make sure you have the required permissions in Aquarium."
+            self.core.popup(msg)
+            return False
 
     @err_catcher(name=__name__)
-    def publishMedia(self, paths, entity, task, version, description="", uploadPreview=True, parent=None, origTask=None):
+    def publishMedia(self, paths, entity, task, version, description="", uploadPreview=True, parent=None, origTask=None, user=None, createTask=False, department=None, playlist=None):
         text = "Publishing media. Please wait..."
         popup = self.core.waitPopup(self.core, text, parent=parent)
         with popup:
@@ -905,7 +1188,7 @@ class Prism_Aquarium_Functions(object):
                     self.core.popup(msg)
                     return
 
-            for task in existingTasks:
+            for existingTask in existingTasks:
                 cleanupPreview = False
                 previewPath = None
                 mediaName = os.path.basename(paths[0])
@@ -924,25 +1207,34 @@ class Prism_Aquarium_Functions(object):
                 mediaData = {
                     "name": mediaName,
                     "prism": {
-                        "path": paths[0]
+                        "type": "media",
+                        "path": paths[0].replace("\\", "/"),
+                        "identifier": origTask or task,
+                        "version": version,
+                        "validation_status": "neutral",
                     }
                 }
 
                 popup.msg.setText("%s media %s. Please wait..." % (messageAction, mediaData['name']))
                 QApplication.processEvents()
 
-                media = castedEntity.upload_on_task(task['data']['name'], previewPath, mediaData, version, True, description)
-                print(media)
+                media = castedEntity.upload_on_task(existingTask['data']['name'], previewPath, mediaData, version, True, description)
                 if cleanupPreview:
                     try:
                         os.remove(previewPath)
                     except Exception:
                         pass
 
-                url = urljoin(self.aq.api_url, '#/open/%s' % media.item._key)
-                data = {"url": url, "versionName": version}
-                return data
+            if playlist:
+                versionData = entity.copy()
+                versionData["identifier"] = task
+                versionData["version"] = version
+                self.prjMng.addMediaToPlaylist(playlist, [versionData])
 
+                url = urljoin(self.aq.api_url, 'open/%s' % media.item._key)
+                data = {"url": url, "versionName": version}
+                # self.getMediaVersions(entity, parent=parent, allowCache=False)
+                return data
 
         return
 
@@ -996,7 +1288,7 @@ class Prism_Aquarium_Functions(object):
         return notes
 
     @err_catcher(name=__name__)
-    def createNote(self, entityType, entity, note, origin):
+    def createNote(self, entityType, entity, note, origin, attachments=None):
         if (entity['id'] is not None):
             item = self.aq.item(entity['id'])
             data = {
@@ -1018,16 +1310,36 @@ class Prism_Aquarium_Functions(object):
         return None
 
     @err_catcher(name=__name__)
-    def createReply(self, entityType, entity, parentNote, note, origin):
+    def createReply(self, entityType, entity, parentNote, note, origin, attachments=None):
         conversationKey = parentNote.get('replyTo', None)
 
         if conversationKey is None:
-            aqTask = self.getTask(entity['entity'], entity['department'], entity['task'])
-            if (aqTask is not None):
-                conversation = self.aq.item(aqTask['id']).append('Conversation', {"name": "Reply from: %s" % note[:20]})
-                self.aq.edge.create('Child', conversation.item._key, parentNote['id'])
-                conversationKey = conversation.item._key
-                parentNote['replyTo'] = conversationKey
+            aqTask_key = None
+            if ("taskId" in entity):
+                aqTask_key = entity['taskId']
+            else:
+                if entityType == "task":
+                    task = entity.get("task", "")
+                elif entityType == "productVersion":
+                    task = entity.get("product", "")
+                elif entityType == "mediaVersion":
+                    task = entity.get("identifier", "")
+                if task:
+                    tasks = self.getTasksFromEntity(entity)
+                    for tsk in tasks:
+                        if tsk["task"] == task:
+                            aqTask_key = tsk['id']
+                            break
+
+            if aqTask_key is None:
+                msg = "Reply is not sent. Couldn't find matching task in Aquarium."
+                self.core.popup(msg)
+                return False
+
+            conversation = self.aq.item(aqTask_key).append('Conversation', {"name": "Reply from: %s" % note[:20]})
+            self.aq.edge.create('Child', conversation.item._key, parentNote['id'])
+            conversationKey = conversation.item._key
+            parentNote['replyTo'] = conversationKey
 
 
         try:
@@ -1056,7 +1368,23 @@ class Prism_Aquarium_Functions(object):
 
     @err_catcher(name=__name__)
     def getAssignedTasks(self, user=None, allowCache=True):
-        def generateTaskData (aqTask, aqEntity):
+
+        if not self.prjMng.ensureLoggedIn():
+            return []
+
+        aqUser = self.aqUser
+        if user:
+            if self.aqUsers is None:
+                self.getAllUsernames()
+            aqUser = self.findUserByName(user) or aqUser
+        user_key = aqUser._key
+
+        if user_key is None:
+            msg = "No user matching the name %s found. Failed to get assigned tasks." % user
+            self.core.popup(msg)
+            return []
+
+        def generateTaskData(aqTask, aqEntity):
             startdate = None
             if (aqTask['data'].get('startdate', None) is not None):
                 startdate = self.aq.utils.datetime(aqTask['data']['startdate']).timestamp()
@@ -1067,7 +1395,7 @@ class Prism_Aquarium_Functions(object):
 
             data = {
                 "name": aqTask['data']['name'],
-                "path": aqEntity['prismPath'],
+                "path": aqEntity.get('prismPath', None),
                 "entity": {
                     "type": aqEntity['item']['type'].lower(),
                 },
@@ -1079,14 +1407,14 @@ class Prism_Aquarium_Functions(object):
 
             if (aqEntity['item']['type'] == 'Asset'):
                 data['entity']['asset_path'] = aqEntity['prismPath']
-                department = self.getDepartmentFromAssetTaskName(task['data']['name'])
+                department = self.getDepartmentFromAssetTaskName(aqTask['data']['name'])
                 if (department is not None):
                     data['department'] = department['name']
 
             elif (aqEntity['item']['type'] == 'Shot'):
                 data['entity']['shot'] = aqEntity['name']
                 data['entity']['sequence'] = aqEntity['sequence']
-                department = self.getDepartmentFromShotTaskName(task['data']['name'])
+                department = self.getDepartmentFromShotTaskName(aqTask['data']['name'])
                 if (department is not None):
                     data['department'] = department['name']
             return data
@@ -1100,55 +1428,109 @@ class Prism_Aquarium_Functions(object):
         if self.aqAssets:
             for asset in self.aqAssets:
                 for task in asset['tasks']:
-                    for u in task['users']:
-                        if u['data']['name'] == user:
-                            data = generateTaskData(task, asset)
-                            tasks.append(data)
+                    if any(
+                        user.get("_key") == user_key
+                        for user in task.get("users", [])
+                    ):
+                        data = generateTaskData(task, asset)
+                        tasks.append(data)
 
         if self.aqShots:
             for shot in self.aqShots:
                 for task in shot['tasks']:
-                    for u in task['users']:
-                        if u['data']['name'] == user:
-                            data = generateTaskData(task, shot)
-                            tasks.append(data)
+                    if any(
+                        user.get("_key") == user_key
+                        for user in task.get("users", [])
+                    ):
+                        data = generateTaskData(task, shot)
+                        tasks.append(data)
 
         return tasks
 
 
     @err_catcher(name=__name__)
-    def getPlaylists(self, allowCache=True, parent=None):
-        return []
-        # text = "Querying playlists - please wait..."
-        # popup = self.core.waitPopup(self.core, text, parent=parent, hidden=True)
+    def getPlaylists(self, allowCache=True, playlistFilter=None):
+        if not self.prjMng.ensureLoggedIn():
+            return []
 
-        # with popup:
-        #     if not self.prjMng.ensureLoggedIn():
-        #         return
+        aqPlaylists = self.aqPlaylists
+        if aqPlaylists is None or allowCache is False:
+            aqPlaylists = self.getAqProjectPlaylists()
 
-        #     playlists = []
-        #     aqPlaylists = self.aqPlaylists
-        #     if (aqPlaylists is None or allowCache == False):
-        #         aqPlaylists = self.getAqProjectPlaylists()
+        if allowCache:
+            self.aqPlaylists = aqPlaylists
 
-        #     for playlist in aqPlaylists:
-        #         playlist = playlist.copy()
-        #         playlist["content"] = self.getContentOfPlaylist(playlist)
-        #         playlists.append(playlist)
+        playlists = []
+        for aqPlaylist in aqPlaylists or []:
+            name = aqPlaylist.get("name")
+            if playlistFilter and playlistFilter not in name:
+                continue
 
-        # return playlists
+            playlist = {
+                "name": name,
+                "id": aqPlaylist.get("_key"),
+                # "thumbnail": aqPlaylist.get("thumbnail") or aqPlaylist.get("medias")[0].get("thumbnail") or None,
+                "medias": aqPlaylist.get("medias") or [],
+            }
+            playlist["content"] = self.getContentOfPlaylist(playlist, allowCache=allowCache)
+            playlists.append(playlist)
 
-    # @err_catcher(name=__name__)
-    # def getContentOfPlaylist(self, playlist, allowCache=True):
-    #     # QUESTION: What's data does the playlist need to contains ?
-    #     content = []
-    #     return content
+        return playlists
 
-    # @err_catcher(name=__name__)
-    # def createPlaylist(self, playlist):
-    #     prjId = self.getCurrentProjectId()
-    #     if prjId is None:
-    #         return
+    @err_catcher(name=__name__)
+    def getContentOfPlaylist(self, playlist, allowCache=True):
+        content = []
+        if not playlist.get("medias"):
+            return content
 
-    #     self.aq.project(prjId).append(type='Playlist', data={"name": playlist["name"]})
-    #     self.getPlaylists(allowCache=False)
+        if self.aqAssets is None or allowCache is False:
+            self.getAssets()
+        if self.aqShots is None or allowCache is False:
+            self.getShots()
+
+        for media in playlist.get("medias", []):
+            mediaData = media.get("data") or {}
+            prismData = getPrismData(mediaData)
+            if prismData and prismData.get("type") == "product":
+                continue
+
+            path = prismData.get("path")
+            entity = getEntityFromPlaylistMedia(
+                mediaData,
+                aqAssets=self.aqAssets,
+                aqShots=self.aqShots,
+                origin=media.get("origin"),
+            )
+            if not entity:
+                continue
+
+            identifier = prismData.get("identifier")
+            versionName = prismData.get("version") or mediaData.get("name")
+            mediaType = self.core.mediaProducts.getMediaTypeFromPath(path) if path else "3drenders"
+
+            idfs = self.core.mediaProducts.getIdentifiersByType(entity) or {}
+            for idfType in idfs:
+                for idf in idfs[idfType]:
+                    if identifier and idf.get("identifier") != identifier:
+                        continue
+
+                    prVersion = self.core.mediaProducts.getVersion(
+                        entity,
+                        identifier=identifier or idf.get("identifier"),
+                        mediaType=mediaType or idf.get("mediaType"),
+                        version=versionName,
+                    )
+                    if prVersion:
+                        content.append(prVersion)
+                        break
+
+        return content
+
+    @err_catcher(name=__name__)
+    def createPlaylist(self, playlist):
+        prjId = self.getCurrentProjectId()
+        if prjId is None:
+            return
+
+        self.aq.project(prjId).append(type="Playlist", data={"name": playlist["name"]})
+        self.getPlaylists(allowCache=False)

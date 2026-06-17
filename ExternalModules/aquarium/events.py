@@ -330,12 +330,16 @@ class Event(Entity):
             self.data=DotMap(entity_data, _dynamic=(not bool(self.parent.strict_dotmap)))
 
         topicRegex = r"^(?:custom[.])?(?P<category>\w+)([.](?P<verb>\w+))?([.](\w+))*$"
-        topicMatched = re.match(topicRegex, self.topic)
-        if topicMatched.group('category'):
-            self._category = topicMatched.group('category')
+        if self.topic:
+            topicMatched = re.match(topicRegex, self.topic)
+            if topicMatched:
+                category = topicMatched.group('category')
+                if category:
+                    self._category = category
 
-        if topicMatched.group('verb'):
-            self._verb = topicMatched.group('verb')
+                verb = topicMatched.group('verb')
+                if verb:
+                    self._verb = verb
 
     def do_request(self, *args, **kwargs):
         """

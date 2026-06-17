@@ -40,8 +40,10 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
         self.aqUsers = None
         self.aqShots = None
         self.aqAssets = None
+        self.aqPlaylists = None
         self.aqProject = None
-        self.aqStatuses = None
+        self.aqTaskStatuses = None
+        self.aqVersionStatuses = None
         self.aqProjectLocations = []
 
         Prism_Aquarium_Variables.__init__(self, core, self)
@@ -51,11 +53,13 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
         meshql = "# $Project AND (item.data.completion >= 0 OR item.data.completion == null) VIEW $view"
         aliases = {
             'view': {
+                'id': "item._key",
                 '_key': 'item._key',
                 'name': 'item.data.name',
                 "status": 'item.data.status',
                 "start_date": "item.data.startDate",
                 "end_date": "item.data.endDate",
+                "thumbnail_url": "item.data.thumbnail",
                 "thumbnail": "item.data.thumbnail",
             }
         }
@@ -94,21 +98,6 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
                 logger.warning("Could not access to project:\n\n%s" % e)
 
         return aqProject
-
-    # @err_catcher(name=__name__)
-    # def getAqProjects(self):
-    #     aliases = {
-    #         'view': {
-    #             'name': 'item.data.name',
-    #             '_key': 'item._key'
-    #         }
-    #     }
-
-    #     projectsfun = self.aq.query(
-    #         meshql="# ($Project AND (item.data.completion >= 0 OR item.data.completion == null) AND NOT (<($Trash)- *)) SORT item.updatedAt DESC VIEW $view",
-    #         aliases=aliases
-    #     )
-    #     return projects
 
     @err_catcher(name=__name__)
     def getShotsLocation (self, project = None):
@@ -248,12 +237,11 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
         return shots
 
     @err_catcher(name=__name__)
-    def getAqProjectStatuses (self, project = None):
-        if project == None: project = self.aqProject
+    def getAqProjectStatuses (self, property = "tasks_status"):
         if self.aqProject == None:
             return []
 
-        query = '# -($Child)> $Properties AND item.data.tasks_status != null VIEW item.data.tasks_status'
+        query = '# -($Child)> $Properties AND item.data.{property} != null VIEW item.data.{property}'.format(property=property)
 
         statuses = []
 
@@ -265,16 +253,19 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
                     statuses.append(aqStatus)
 
         if len(statuses) == 0:
-            statuses = list(self._aq_api.DEFAULT_STATUSES.values())
+            if property == "versions_status":
+                statuses = list(self._aq_api.DEFAULT_VERSION_STATUSES.values())
+            else:
+                statuses = list(self._aq_api.DEFAULT_STATUSES.values())
 
         return statuses
 
     @err_catcher(name=__name__)
     def getAqStatusFromName (self, statusName):
         status = None
-        aqStatuses = self.getAqProjectStatuses()
+        aqTaskStatuses = self.getAqProjectStatuses()
 
-        aqStatus = [aqStatus for aqStatus in aqStatuses if aqStatus['status'] == statusName]
+        aqStatus = [aqStatus for aqStatus in aqTaskStatuses if aqStatus['status'] == statusName]
         if len(aqStatus) > 0:
             status = aqStatus[0]
 
@@ -300,8 +291,13 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
             "mediaView": {
                 "_key": "item._key",
                 "data": "item.data",
-                "origin": "FIRST(# <($Origin)- 0,1 * VIEW item)",
+                "origin": "FIRST(# <($Origin)- 0,1 * VIEW $originView)",
                 "comments": "# -($Child)> 0,500 $Comment SORT edge.createdAt ASC VIEW populate(item)"
+            },
+            "originView": {
+                "_key": "item._key",
+                "item": "item",
+                "parents": "FIRST(# <($Child, 2)- 0,1 item.type IN ['Asset', 'Shot'] SORT null VIEW REVERSE(path.vertices))",
             }
         }
 
@@ -317,5 +313,74 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
         find = lambda shot: shot.get('sequence', '') == sequence and shot.get('name', '') == name
         return next(filter(find, self.aqShots), None)
 
-    def getPlaylists(self, allowCache=True, parent=None):
-        return []
+    def findUserByName(self, name):
+        find = lambda user: user.data.name == name
+        return next(filter(find, self.aqUsers), None)
+
+    @err_catcher(name=__name__)
+    def resolveAqEntity(self, entity):
+        if entity.get("type") == "asset":
+            return self.findAssetByPath(entity.get("asset_path", ""))
+        if entity.get("type") == "shot":
+            return self.findShotBySequenceAndName(entity.get("sequence", ""), entity.get("shot", ""))
+        return None
+
+    @err_catcher(name=__name__)
+    def getEntityDisplayName(self, entity):
+        if entity.get("type") == "asset":
+            return entity.get("asset_path", "").replace("\\", "/")
+        if entity.get("type") == "shot":
+            return self.core.entities.getShotName(entity)
+        return ""
+
+    @err_catcher(name=__name__)
+    def getAqTaskVersions(self, entityKey, prismType=None):
+        query = "# -($Child, 2)> $Task VIEW $taskView"
+        aliases = {
+            "taskView": {
+                "taskKey": "item._key",
+                "taskName": "item.data.name",
+                "versions": "# -($Child)> $Version SORT edge.createdAt ASC VIEW $versionView",
+            },
+            "versionView": {
+                "versionKey": "item._key",
+                "versionName": "item.data.name",
+                "medias": "# -($Child)> $Media SORT edge.createdAt DESC VIEW $mediaView",
+            },
+            "mediaView": {
+                "mediaKey": "item._key",
+                "data": "item.data",
+            },
+        }
+
+        tasks = self.aq.item(entityKey).traverse(meshql=query, aliases=aliases) or []
+        versions = []
+
+        for task in tasks:
+            for version in task.get("versions") or []:
+                for media in version.get("medias") or []:
+                    mediaData = media.get("data") or {}
+                    mediaPrismType = mediaData.get("prism", {}).get("type", "media")
+                    if prismType and mediaPrismType != prismType:
+                        continue
+
+                    versions.append({
+                        "taskKey": task.get("taskKey"),
+                        "taskName": task.get("taskName"),
+                        "versionKey": version.get("versionKey"),
+                        "versionName": version.get("versionName"),
+                        "mediaKey": media.get("mediaKey"),
+                        "data": mediaData,
+                        "prismType": mediaPrismType,
+                    })
+
+        return versions
+
+    @err_catcher(name=__name__)
+    def buildPrismVersionLabel(self, entity, task, version, origTask=None):
+        taskLabel = origTask or task
+        return "%s_%s_%s" % (
+            self.getEntityDisplayName(entity),
+            taskLabel,
+            version,
+        )
