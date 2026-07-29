@@ -1328,11 +1328,11 @@ class Prism_Aquarium_Functions(object):
                     except Exception:
                         pass
 
-            if playlist:
-                versionData = entity.copy()
-                versionData["identifier"] = task
-                versionData["version"] = version
-                self.prjMng.addMediaToPlaylist(playlist, [versionData])
+                if playlist:
+                    versionData = entity.copy()
+                    versionData["identifier"] = task
+                    versionData["version"] = version
+                    self.prjMng.addMediaToPlaylist(playlist, [versionData])
 
                 url = urljoin(self.aq.api_url, 'open/%s' % media.item._key)
                 data = {"url": url, "versionName": version}
