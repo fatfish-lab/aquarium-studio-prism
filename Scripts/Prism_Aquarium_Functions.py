@@ -39,7 +39,7 @@ else:
     from urlparse import urljoin
 
 
-from Prism_Aquarium_Utils import baseUrl, getFileFromAq, hexToRgb, getPrismData, getValidationStatus, getEntityFromPlaylistMedia
+from Prism_Aquarium_Utils import prismifyShot, prismifyAsset, getFileFromAq, hexToRgb, getPrismData, getValidationStatus, getEntityFromPlaylistMedia
 from PrismUtils.Decorators import err_catcher_plugin as err_catcher
 from qtpy.QtCore import *
 from qtpy.QtGui import *
@@ -577,6 +577,42 @@ class Prism_Aquarium_Functions(object):
             return departments
 
     @err_catcher(name=__name__)
+    def getEpisodeDepartments(self, allowCache=True):
+        text = "Querying episode departments - please wait..."
+        popup = self.core.waitPopup(self.core, text, hidden=True)
+        with popup:
+            departments = []
+            if self.aqProject and 'properties' in self.aqProject.prism:
+                aqDepartments = self.aqProject.prism['properties'].get('departments').get('episode')
+                if aqDepartments and len(aqDepartments) > 0:
+                    for department in aqDepartments:
+                        departments.append({
+                            "name": department.get('name'),
+                            "abbreviation": department.get('name'),
+                            "defaultTasks": department.get('tasks')
+                        })
+
+            return departments
+
+    @err_catcher(name=__name__)
+    def getSequenceDepartments(self, allowCache=True):
+        text = "Querying sequence departments - please wait..."
+        popup = self.core.waitPopup(self.core, text, hidden=True)
+        with popup:
+            departments = []
+            if self.aqProject and 'properties' in self.aqProject.prism:
+                aqDepartments = self.aqProject.prism['properties'].get('departments').get('sequence')
+                if aqDepartments and len(aqDepartments) > 0:
+                    for department in aqDepartments:
+                        departments.append({
+                            "name": department.get('name'),
+                            "abbreviation": department.get('name'),
+                            "defaultTasks": department.get('tasks')
+                        })
+
+            return departments
+
+    @err_catcher(name=__name__)
     def getConnectedEntities(self, entity):
         # QUESTION: What's a connected entity ?
         centities = []
@@ -638,13 +674,7 @@ class Prism_Aquarium_Functions(object):
                 if path and not aqAsset['prismPath'].startswith(path):
                     continue
 
-                assetData = {
-                    "type": "asset",
-                    "id": aqAsset['item']['_key'],
-                    "asset_path": aqAsset['prismPath'],
-                    "description": aqAsset['item']['data'].get('description'),
-                    "thumbnail": aqAsset['thumbnail']
-                }
+                assetData = prismifyAsset(aqAsset)
                 assets.append(assetData)
 
             if not path:
@@ -656,6 +686,26 @@ class Prism_Aquarium_Functions(object):
     # def getAssetId(self, entity, prjId=None, popup=None):
     #     # QUESTION: What's the goal of that function ?
     #     return
+    @err_catcher(name=__name__)
+    def getEpisodes(self, parent=None, allowCache=True, includeOmitted=False):
+        shots = self.getShots(parent=parent, allowCache=allowCache, includeOmitted=includeOmitted)
+        episodes = []
+        for shot in shots:
+            if "episode" not in shot:
+                continue
+
+            if shot["episode"] in [episode["episode"] for episode in episodes]:
+                continue
+
+            epData = {
+                "type": "shot",
+                "episode": shot["episode"],
+                "sequence": "_episode",
+                "shot": "_sequence",
+            }
+            episodes.append(epData)
+
+        return episodes
 
     @err_catcher(name=__name__)
     def getSequences(self, parent=None, allowCache=True, episode=None, includeOmitted=False):
@@ -682,7 +732,6 @@ class Prism_Aquarium_Functions(object):
 
     @err_catcher(name=__name__)
     def getShots(self, parent=None, allowCache=True, episode=None, sequence=None, includeOmitted=False):
-        # TODO: Add episode management
         text = "Querying shots - please wait..."
         popup = self.core.waitPopup(self.core, text, parent=parent, hidden=True)
         with popup:
@@ -693,7 +742,7 @@ class Prism_Aquarium_Functions(object):
 
             aqShots = self.aqShots
             if (aqShots is None):
-                aqShots = self.getAqProjectShots()
+                aqShots = self.getAqProjectShots(withEpisodes=self.core.projects.getUseEpisodes())
                 self.aqShots = aqShots
 
             if self.showAssignedTasksOnly:
@@ -708,16 +757,7 @@ class Prism_Aquarium_Functions(object):
                 ]
 
             for aqShot in aqShots:
-                shotData = {
-                    "type": "shot",
-                    "id": aqShot['item']['_key'],
-                    "shot": aqShot['item']['data'].get('name', ''),
-                    "sequence": aqShot['sequence'],
-                    "start": aqShot['item']['data'].get('frameIn'),
-                    "end": aqShot['item']['data'].get('frameOut'),
-                    "description": aqShot['item']['data'].get('description'),
-                    "thumbnail": aqShot['thumbnail']
-                }
+                shotData = prismifyShot(aqShot)
 
                 # FIXME: Do not file the list of shots, change the query for faster results
                 if (sequence and sequence != shotData["sequence"]):
@@ -727,18 +767,18 @@ class Prism_Aquarium_Functions(object):
 
             return shots
 
-    @err_catcher(name=__name__)
-    def getShotByEntity(self, entity, quiet=False):
-        shots = self.getShots()
-        if shots is None:
-            return
+    # @err_catcher(name=__name__)
+    # def getShotByEntity(self, entity, quiet=False):
+    #     shots = self.getShots()
+    #     if shots is None:
+    #         return
 
-        for shot in shots:
-            if shot["sequence"] == entity["sequence"] and shot["shot"] == entity["shot"]:
-                return shot
+    #     for shot in shots:
+    #         if shot["sequence"] == entity["sequence"] and shot["shot"] == entity["shot"]:
+    #             return shot
 
-        msg = 'Could not find shot "%s" in Aquarium.' % self.core.entities.getShotName(entity)
-        self.core.popup(msg)
+    #     msg = 'Could not find shot "%s" in Aquarium.' % self.core.entities.getShotName(entity)
+    #     self.core.popup(msg)
 
     @err_catcher(name=__name__)
     def getShotId(self, entity, prjId=None):
@@ -761,6 +801,22 @@ class Prism_Aquarium_Functions(object):
     def getDepartmentFromAssetTaskName(self, taskName):
         department = None
         departements = [department for department in self.getAssetDepartments() if taskName in department['defaultTasks']]
+        if (len(departements) > 0):
+            department = departements[0]
+        return department
+
+    @err_catcher(name=__name__)
+    def getDepartmentFromEpisodeTaskName(self, taskName):
+        department = None
+        departements = [department for department in self.getEpisodeDepartments() if taskName in department['defaultTasks']]
+        if (len(departements) > 0):
+            department = departements[0]
+        return department
+
+    @err_catcher(name=__name__)
+    def getDepartmentFromSequenceTaskName(self, taskName):
+        department = None
+        departements = [department for department in self.getSequenceDepartments() if taskName in department['defaultTasks']]
         if (len(departements) > 0):
             department = departements[0]
         return department
@@ -810,10 +866,57 @@ class Prism_Aquarium_Functions(object):
                                 "id": aqTask["_key"],
                             }
                             tasks.append(data)
-            elif (entity["type"] == 'shot'):
-                aqEntities = [aqShot for aqShot in self.aqShots if aqShot['sequence'] == entity.get("sequence", "") and aqShot['name'] == entity.get("shot", "")]
+            elif entity["itemType"] == 'episode':
+                aqEntities = [aqShot for aqShot in self.aqShots if aqShot.get('episode', {}).get('item', {}).get('data', {}).get('name', "") == entity.get("episode", "")]
                 if len(aqEntities) > 0:
-                    aqTasks = aqEntities[0]['tasks']
+                    aqTasks = aqEntities[0].get('episode', {}).get('tasks', [])
+
+                    if self.showAssignedTasksOnly:
+                        aqTasks = [
+                            task for task in aqTasks
+                            if any(
+                                user.get("_key") == user_key
+                                for user in task.get("users", [])
+                            )
+                        ]
+                    for aqTask in aqTasks:
+                        department = self.getDepartmentFromEpisodeTaskName(aqTask["data"]["name"])
+                        if department:
+                            data = {
+                                "department": department['name'],
+                                "task": aqTask["data"]["name"],
+                                "status": aqTask['data'].get('status', ''),
+                                "id": aqTask["_key"],
+                            }
+                            tasks.append(data)
+            elif entity["itemType"] == 'sequence':
+                aqEntities = [aqShot for aqShot in self.aqShots if aqShot.get('episode', {}).get('item', {}).get('data', {}).get('name', "") == entity.get("episode", "") and aqShot['sequenceName'] == entity.get("sequence", "")]
+                if len(aqEntities) > 0:
+                    aqTasks = aqEntities[0].get('sequence', {}).get('tasks', [])
+
+                    if self.showAssignedTasksOnly:
+                        aqTasks = [
+                            task for task in aqTasks
+                            if any(
+                                user.get("_key") == user_key
+                                for user in task.get("users", [])
+                            )
+                        ]
+                    for aqTask in aqTasks:
+                        department = self.getDepartmentFromSequenceTaskName(aqTask["data"]["name"])
+                        if department:
+                            data = {
+                                "department": department['name'],
+                                "task": aqTask["data"]["name"],
+                                "status": aqTask['data'].get('status', ''),
+                                "id": aqTask["_key"],
+                            }
+                            tasks.append(data)
+            elif entity["type"] == 'shot':
+                aqEntities = [aqShot for aqShot in self.aqShots if aqShot.get('episode', {}).get('item', {}).get('data', {}).get('name', "") == entity.get("episode", "") and aqShot['sequenceName'] == entity.get("sequence", "") and aqShot['name'] == entity.get("shot", "")]
+                if len(aqEntities) > 0:
+                    aqTasks = aqEntities[0].get('tasks', [])
+
                     if self.showAssignedTasksOnly:
                         aqTasks = [
                             task for task in aqTasks
@@ -890,11 +993,11 @@ class Prism_Aquarium_Functions(object):
     def _formatMediaVersions(self, entity, aqVersions):
         versionData = []
         for aqVersion in aqVersions:
-            prismData = getPrismData(aqVersion.get("data"))
+            prismData = getPrismData(aqVersion.get("data")) or {}
             versionData.append({
                 "identifier": prismData.get("identifier") or aqVersion["taskName"],
                 "version": aqVersion["versionName"],
-                "status": getValidationStatus(aqVersion.get("data")),
+                "status": getValidationStatus(prismData),
                 "id": aqVersion["mediaKey"],
                 "taskId": aqVersion["taskKey"],
                 "versionKey": aqVersion["versionKey"],
@@ -1114,7 +1217,7 @@ class Prism_Aquarium_Functions(object):
             if not aqEntity:
                 return []
 
-            aqVersions = self.getAqTaskVersions(aqEntity["_key"], prismType="media")
+            aqVersions = self.getAqTaskVersions(aqEntity["_key"])
             return self._formatMediaVersions(entity, aqVersions)
 
     @err_catcher(name=__name__)
@@ -1211,7 +1314,7 @@ class Prism_Aquarium_Functions(object):
                         "path": paths[0].replace("\\", "/"),
                         "identifier": origTask or task,
                         "version": version,
-                        "validation_status": "neutral",
+                        "validation_status": None,
                     }
                 }
 
@@ -1261,7 +1364,7 @@ class Prism_Aquarium_Functions(object):
             return data
 
         if entity['id'] is not None:
-            meshql='# -($Child, 3)> 0, 500 $Comment AND path.vertices[-2].type IN ["Task", "Media"] SET $set SORT item.createdAt DESC VIEW $view'
+            meshql='# -($Child, 4)> 0, 500 $Comment AND path.vertices[-2].type IN ["Task", "Media"] SET $set SORT item.createdAt DESC VIEW $view'
             aliases = {
                 "set": {
                     "comment": "item"
@@ -1276,7 +1379,6 @@ class Prism_Aquarium_Functions(object):
                 }
             }
             comments = self.aq.item(entity['id']).traverse(meshql, aliases)
-            print(comments)
 
             for comment in comments:
                 replies = None
@@ -1413,7 +1515,7 @@ class Prism_Aquarium_Functions(object):
 
             elif (aqEntity['item']['type'] == 'Shot'):
                 data['entity']['shot'] = aqEntity['name']
-                data['entity']['sequence'] = aqEntity['sequence']
+                data['entity']['sequence'] = aqEntity['sequenceName']
                 department = self.getDepartmentFromShotTaskName(aqTask['data']['name'])
                 if (department is not None):
                     data['department'] = department['name']

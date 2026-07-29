@@ -49,14 +49,16 @@ def getPrismData(itemData):
         return {}
 
     if isinstance(itemData, dict):
-        return itemData.get("prism") or {}
+        return itemData.get("prism", None)
 
-    return getattr(itemData, "prism", None) or {}
+    return getattr(itemData, "prism", None)
 
 
-def getValidationStatus(itemData, default="neutral"):
-    prismData = getPrismData(itemData)
-    return prismData.get("validation_status") or default
+def getValidationStatus(prismData):
+    if prismData and "validation_status" in prismData:
+        return prismData.get("validation_status")
+
+    return None
 
 
 # def getPrismType(itemData):
@@ -66,18 +68,20 @@ def getValidationStatus(itemData, default="neutral"):
 
 def getEntityFromPlaylistMedia(mediaData, aqAssets=None, aqShots=None, origin=None):
     prismData = getPrismData(mediaData)
-    path = (prismData.get("path") or "").replace("\\", "/")
 
-    if aqAssets:
-        for asset in aqAssets:
-            if path and path.startswith(asset.get("prismPath", "")):
-                return asset
+    if prismData:
+        path = (prismData.get("path") or "").replace("\\", "/")
 
-    if aqShots:
-        for shot in aqShots:
-            shotName = shot.get("name") or shot.get("item", {}).get("data", {}).get("name", "")
-            if path and shotName and shotName in path:
-                return shot
+        if aqAssets:
+            for asset in aqAssets:
+                if path and path.startswith(asset.get("prismPath", "")):
+                    return prismifyAsset(asset)
+
+        if aqShots:
+            for shot in aqShots:
+                shotName = shot.get("name") or shot.get("item", {}).get("data", {}).get("name", "")
+                if path and shotName and shotName in path:
+                    return prismifyShot(shot)
 
     originType = None
     originKey = None
@@ -90,12 +94,12 @@ def getEntityFromPlaylistMedia(mediaData, aqAssets=None, aqShots=None, origin=No
     if originType == "Shot" and aqShots:
         for shot in aqShots:
             if shot.get("_key") == originKey:
-                return shot
+                return prismifyShot(shot)
 
     if originType == "Asset" and aqAssets:
         for asset in aqAssets:
             if asset.get("_key") == originKey:
-                return asset
+                return prismifyAsset(asset)
 
     return None
 
@@ -119,3 +123,25 @@ def getFileFromAq(file_url, aq):
             f.close()
 
     return file_path
+
+def prismifyShot(aqShot):
+    return {
+        "type": "shot",
+        "id": aqShot['item']['_key'],
+        "shot": aqShot['item']['data'].get('name', ''),
+        "sequence": aqShot['sequenceName'],
+        "start": aqShot['item']['data'].get('frameIn'),
+        "end": aqShot['item']['data'].get('frameOut'),
+        "description": aqShot['item']['data'].get('description'),
+        "thumbnail": aqShot['thumbnail'],
+        "episode": aqShot.get('episodeName', '')
+    }
+
+def prismifyAsset(aqAsset):
+    return {
+        "type": "asset",
+        "id": aqAsset['item']['_key'],
+        "asset_path": aqAsset['prismPath'],
+        "description": aqAsset['item']['data'].get('description'),
+        "thumbnail": aqAsset['thumbnail']
+    }

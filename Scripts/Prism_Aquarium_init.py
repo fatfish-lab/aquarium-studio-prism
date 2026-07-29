@@ -175,7 +175,7 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
         return assets
 
     @err_catcher(name=__name__)
-    def getAqProjectShots(self, project = None):
+    def getAqProjectShots(self, project = None, withEpisodes = False):
         if (project == None): project = self.aqProject
 
         if project == None:
@@ -206,6 +206,19 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
             }
         }
 
+        aliases["view"]["sequence"] = "FIRST(# <($Child)- 0,1 $Sequence SORT null VIEW $sequenceView)"
+        aliases["sequenceView"] = {
+            "item": "item",
+            "tasks": "# -($Child, 2)> $Task AND path.vertices[-2].type IN ['Sequence','Task'] SORT edge.data.weight VIEW $taskView"
+        }
+
+        if withEpisodes:
+            aliases["view"]["episode"] = "FIRST(# <($Child, 3)- 0,1 $Episode SORT null VIEW $episodeView)"
+            aliases["episodeView"] = {
+                "item": "item",
+                "tasks": "# -($Child, 2)> $Task AND path.vertices[-2].type IN ['Episode','Task'] SORT edge.data.weight VIEW $taskView"
+            }
+
         if (usePrismNamingConvention):
             aliases["view"]["name"] = "SUBSTITUTE(item.data.name, [ '_',' ','-' ], '{separator}' )".format(
                 separator=separator
@@ -232,7 +245,9 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
                 )
                 sequence = shot['parentName']
             shot['prismId'] = prismId
-            shot['sequence'] = sequence
+            shot['sequenceName'] = sequence
+            if withEpisodes:
+                shot['episodeName'] = shot.get('episode', {}).get('item', {}).get('data', {}).get('name', '')
 
         return shots
 
@@ -286,31 +301,44 @@ class Prism_Aquarium(Prism_Aquarium_Variables, Prism_Aquarium_Functions):
                 "_key": "item._key",
                 "name": "item.data.name",
                 "thumbnail": "item.data.thumbnail",
-                "medias": "# -($Child OR $Playlist)> 0,500 $Media SORT edge.createdAt ASC VIEW $mediaView"
+                "parent": "path.vertices[-2]",
+                "medias": "# -()> 0,500 edge.type IN ['Child', 'Playlist'] AND $Media SORT edge.createdAt ASC VIEW $mediaView"
             },
             "mediaView": {
                 "_key": "item._key",
                 "data": "item.data",
                 "origin": "FIRST(# <($Origin)- 0,1 * VIEW $originView)",
+                "parent": "$originView",
                 "comments": "# -($Child)> 0,500 $Comment SORT edge.createdAt ASC VIEW populate(item)"
             },
             "originView": {
                 "_key": "item._key",
                 "item": "item",
-                "parents": "FIRST(# <($Child, 2)- 0,1 item.type IN ['Asset', 'Shot'] SORT null VIEW REVERSE(path.vertices))",
+                "parents": "FIRST(# <($Child, 3)- 0,1 item.type IN ['Asset', 'Shot'] SORT null VIEW REVERSE(path.vertices))",
             }
         }
 
         playlists = self.aq.item(project._key).traverse(meshql=query, aliases=aliases)
         return playlists
 
+    @err_catcher(name=__name__)
+    def findPlaylistByName(self, playlistName):
+        playlists = self.aqPlaylists
+        if playlists is None:
+            playlists = self.getAqProjectPlaylists()
+
+        for playlist in playlists:
+            if playlist["name"] == playlistName:
+                return playlist
+
+        return None
 
     def findAssetByPath(self, path):
         find = lambda asset: asset.get('prismPath', '') == path.replace('\\', "/")
         return next(filter(find, self.aqAssets), None)
 
     def findShotBySequenceAndName(self, sequence, name):
-        find = lambda shot: shot.get('sequence', '') == sequence and shot.get('name', '') == name
+        find = lambda shot: shot.get('sequenceName', '') == sequence and shot.get('name', '') == name
         return next(filter(find, self.aqShots), None)
 
     def findUserByName(self, name):
