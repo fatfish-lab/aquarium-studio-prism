@@ -1472,7 +1472,13 @@ class Prism_Aquarium_Functions(object):
                 # "thumbnail": aqPlaylist.get("thumbnail") or aqPlaylist.get("medias")[0].get("thumbnail") or None,
                 "medias": aqPlaylist.get("medias") or [],
             }
-            playlist["content"] = self.getContentOfPlaylist(playlist, allowCache=allowCache)
+
+            if "parent" in aqPlaylist:
+                if aqPlaylist.get("parent").get("_key") != self.aqProject._key:
+                    parentName = aqPlaylist.get("parent").get("data").get("name")
+                    playlist["name"] = f"{parentName}/{playlist["name"]}"
+
+            playlist["content"] = self.getContentOfPlaylist(aqPlaylist, allowCache=allowCache)
             playlists.append(playlist)
 
         return playlists
@@ -1491,38 +1497,64 @@ class Prism_Aquarium_Functions(object):
         for media in playlist.get("medias", []):
             mediaData = media.get("data") or {}
             prismData = getPrismData(mediaData)
-            if prismData and prismData.get("type") == "product":
-                continue
 
-            path = prismData.get("path")
-            entity = getEntityFromPlaylistMedia(
-                mediaData,
-                aqAssets=self.aqAssets,
-                aqShots=self.aqShots,
-                origin=media.get("origin"),
-            )
-            if not entity:
-                continue
+            if prismData is None:
+                # continue
+                entity = getEntityFromPlaylistMedia(
+                    mediaData,
+                    aqAssets=self.aqAssets,
+                    aqShots=self.aqShots,
+                    origin=media.get("origin") or media.get("parent"),
+                )
+                if not entity:
+                    entity = dict()
+                    # continue
 
-            identifier = prismData.get("identifier")
-            versionName = prismData.get("version") or mediaData.get("name")
-            mediaType = self.core.mediaProducts.getMediaTypeFromPath(path) if path else "3drenders"
+                thumbnail_path = getFileFromAq(mediaData.get("thumbnail"), self.aq)
+                print(f"thumbnail_path: {thumbnail_path}")
+                if thumbnail_path:
+                    entity["thumbnail"] = thumbnail_path
 
-            idfs = self.core.mediaProducts.getIdentifiersByType(entity) or {}
-            for idfType in idfs:
-                for idf in idfs[idfType]:
-                    if identifier and idf.get("identifier") != identifier:
-                        continue
+                file_path = getFileFromAq(mediaData.get("url"), self.aq)
+                if file_path:
+                    print(f"file_path: {file_path}")
+                    entity["path"] = file_path
+                    entity["paths"] = [file_path]
+                    content.append(entity)
+                    continue
+            else:
+                if prismData and prismData.get("type") == "product":
+                    continue
 
-                    prVersion = self.core.mediaProducts.getVersion(
-                        entity,
-                        identifier=identifier or idf.get("identifier"),
-                        mediaType=mediaType or idf.get("mediaType"),
-                        version=versionName,
-                    )
-                    if prVersion:
-                        content.append(prVersion)
-                        break
+                path = prismData.get("path")
+                entity = getEntityFromPlaylistMedia(
+                    mediaData,
+                    aqAssets=self.aqAssets,
+                    aqShots=self.aqShots,
+                    origin=media.get("origin") or media.get("parent"),
+                )
+                if not entity:
+                    continue
+
+                identifier = prismData.get("identifier")
+                versionName = prismData.get("version") or mediaData.get("name")
+                mediaType = self.core.mediaProducts.getMediaTypeFromPath(path) if path else "3drenders"
+
+                idfs = self.core.mediaProducts.getIdentifiersByType(entity) or {}
+                for idfType in idfs:
+                    for idf in idfs[idfType]:
+                        if identifier and idf.get("identifier") != identifier:
+                            continue
+
+                        prVersion = self.core.mediaProducts.getVersion(
+                            entity,
+                            identifier=identifier or idf.get("identifier"),
+                            mediaType=mediaType or idf.get("mediaType"),
+                            version=versionName,
+                        )
+                        if prVersion and not any(x.get("id") == prVersion.get("id") for x in content):
+                            content.append(prVersion)
+                            break
 
         return content
 
@@ -1534,3 +1566,23 @@ class Prism_Aquarium_Functions(object):
 
         self.aq.project(prjId).append(type="Playlist", data={"name": playlist["name"]})
         self.getPlaylists(allowCache=False)
+
+    @err_catcher(name=__name__)
+    def addContentsToPlaylist(self, mediaVersions, playlistName):
+        aqPlaylist = self.findPlaylistByName(playlistName)
+
+        if not aqPlaylist:
+            aqPlaylist = self.createPlaylist(playlistName)
+            aqPlaylist = self.findPlaylistByName(playlistName)
+            if not aqPlaylist:
+                msg = "Can't import your medias. Could not find nor create playlist '%s' in Aquarium." % playlistName
+                self.core.popup(msg)
+                return
+
+        for mediaVersion in mediaVersions:
+            if (mediaVersion.get("id") is not None):
+                self.aq.edge.create('Playlist', aqPlaylist.get("_key"), mediaVersion.get("id"))
+            else:
+                self.aq.playlist(aqPlaylist.get("_key")).import_medias([mediaVersion.get("path")])
+
+        return True
