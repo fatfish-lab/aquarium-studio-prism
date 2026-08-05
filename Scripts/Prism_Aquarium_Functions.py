@@ -126,6 +126,20 @@ class Prism_Aquarium_Functions(object):
         return data
 
     @err_catcher(name=__name__)
+    def validateAuthorization(self, auth):
+        if not auth.get("aquarium_email") and not auth.get("aquarium_token"):
+            msg = "Please enter your Aquarium email or a token."
+            self.core.popup(msg)
+            return False
+
+        if not auth.get("aquarium_password") and not auth.get("aquarium_token"):
+            msg = "Please enter your Aquarium password or a token."
+            self.core.popup(msg)
+            return False
+
+        return True
+
+    @err_catcher(name=__name__)
     def getIconPath(self):
         path = os.path.join(self.pluginDirectory, "Resources", "aquarium.png")
         return path
@@ -142,12 +156,15 @@ class Prism_Aquarium_Functions(object):
         return data.get("aquarium_email")
 
     @err_catcher(name=__name__)
-    def getThumbnail(self, entity):
+    def getThumbnail(self, entity, qimage=False):
         if entity.get('thumbnail', None) is None:
             return None
 
         thumbnail_path = getFileFromAq(entity["thumbnail"], self.aq)
-        return self.core.media.getPixmapFromPath(thumbnail_path)
+        if qimage:
+            return self.core.media.getQImageFromPath(thumbnail_path)
+        else:
+            return self.core.media.getPixmapFromPath(thumbnail_path)
 
     @err_catcher(name=__name__)
     def getAllUsernames(self):
@@ -208,7 +225,7 @@ class Prism_Aquarium_Functions(object):
             {"name": "aquarium_setup", "label": "Setup...", "tooltip": "Opens a setup window to guide you through the process of connecting your Aquarium project to your Prism project.", "type": "QPushButton", "callback": self.prjMng.openSetupDlg},
             {"name": "aquarium_url", "label": "Url", "type": "QLineEdit"},
             # QUESTION: How to have a combo box with projects in it ?
-            {"name": "aquarium_projectKey", "label": "Project key", "type": "QLineEdit"},
+            {"name": "aquarium_projectKey", "label": "Project key", "type": "QLineEdit", "projectSelector": True},
             {"name": "aquarium_versionPubStatus", "label": "Status applied on publish", "type": "QLineEdit", "default": "PENDING REVIEW"},
             {"name": "aquarium_showTaskStatus", "label": "Show Task Status", "type": "QCheckBox", "default": True},
             {"name": "aquarium_showProductStatus", "label": "Show Product Status", "type": "QCheckBox", "default": True},
@@ -229,6 +246,10 @@ class Prism_Aquarium_Functions(object):
         return data
 
     @err_catcher(name=__name__)
+    def getProjectNameSettingKey(self):
+        return "aquarium_projectKey"
+
+    @err_catcher(name=__name__)
     def getRemoteUrl(self):
         url = self.core.getConfig("prjManagement", "aquarium_url", config="project") or ""
         return url
@@ -240,7 +261,6 @@ class Prism_Aquarium_Functions(object):
     @err_catcher(name=__name__)
     def getCurrentUrl(self):
         return self.aq.api_url
-
 
     @err_catcher(name=__name__)
     def getSyncPlaylists(self):
