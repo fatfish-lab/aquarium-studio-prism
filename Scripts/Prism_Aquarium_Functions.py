@@ -1577,8 +1577,8 @@ class Prism_Aquarium_Functions(object):
 
             if "parent" in aqPlaylist:
                 if aqPlaylist.get("parent").get("_key") != self.aqProject._key:
-                    parentName = aqPlaylist.get("parent").get("data").get("name")
-                    playlist["name"] = f"{parentName}/{playlist["name"]}"
+                    parentName = aqPlaylist.get("parent").get("data").get("name") or ""
+                    playlist["name"] = f"{parentName}/{playlist.get("name", "")}"
 
             playlist["content"] = self.getContentOfPlaylist(aqPlaylist, allowCache=allowCache)
             playlists.append(playlist)
