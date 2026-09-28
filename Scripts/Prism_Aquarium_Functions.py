@@ -843,7 +843,7 @@ class Prism_Aquarium_Functions(object):
             tasks = []
             user_key = self.aqUser._key
 
-            if (entity["type"] == 'asset'):
+            if entity.get("type") == 'asset':
                 aqEntities = [aqAsset for aqAsset in self.aqAssets if aqAsset['prismPath'] == entity.get("asset_path", "").replace("\\", "/")]
                 if len(aqEntities) > 0:
                     aqTasks = aqEntities[0]['tasks']
@@ -866,7 +866,7 @@ class Prism_Aquarium_Functions(object):
                                 "id": aqTask["_key"],
                             }
                             tasks.append(data)
-            elif entity["itemType"] == 'episode':
+            elif entity.get("itemType") == 'episode':
                 aqEntities = [aqShot for aqShot in self.aqShots if aqShot.get('episode', {}).get('item', {}).get('data', {}).get('name', "") == entity.get("episode", "")]
                 if len(aqEntities) > 0:
                     aqTasks = aqEntities[0].get('episode', {}).get('tasks', [])
@@ -889,7 +889,7 @@ class Prism_Aquarium_Functions(object):
                                 "id": aqTask["_key"],
                             }
                             tasks.append(data)
-            elif entity["itemType"] == 'sequence':
+            elif entity.get("itemType") == 'sequence':
                 aqEntities = [aqShot for aqShot in self.aqShots if aqShot.get('episode', {}).get('item', {}).get('data', {}).get('name', "") == entity.get("episode", "") and aqShot['sequenceName'] == entity.get("sequence", "")]
                 if len(aqEntities) > 0:
                     aqTasks = aqEntities[0].get('sequence', {}).get('tasks', [])
@@ -912,7 +912,7 @@ class Prism_Aquarium_Functions(object):
                                 "id": aqTask["_key"],
                             }
                             tasks.append(data)
-            elif entity["type"] == 'shot':
+            elif entity.get("type") == 'shot':
                 aqEntities = [aqShot for aqShot in self.aqShots if aqShot.get('episode', {}).get('item', {}).get('data', {}).get('name', "") == entity.get("episode", "") and aqShot['sequenceName'] == entity.get("sequence", "") and aqShot['name'] == entity.get("shot", "")]
                 if len(aqEntities) > 0:
                     aqTasks = aqEntities[0].get('tasks', [])
